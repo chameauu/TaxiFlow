@@ -18,11 +18,11 @@ pytestmark = pytest.mark.contract
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_PATH = PROJECT_ROOT / "compose.yaml"
 ENV_EXAMPLE_PATH = PROJECT_ROOT / ".env.example"
-TRINO_DELTA_PATH = PROJECT_ROOT / "config" / "trino" / "catalog" / "delta.properties"
+TRINO_DELTA_PATH = PROJECT_ROOT / "config" / "trino" / "etc" / "catalog" / "delta.properties"
 MAKEFILE_PATH = PROJECT_ROOT / "Makefile"
 CI_PATH = PROJECT_ROOT / ".github" / "workflows" / "ci.yml"
 
-CORE_SERVICES = {"minio", "postgres", "hive-metastore", "trino"}
+CORE_SERVICES = {"minio", "minio-init", "postgres", "hive-metastore", "trino"}
 STREAM_SERVICES = {"zookeeper", "kafka", "schema-registry", "debezium"}
 ORCHESTRATION_SERVICES = {"airflow-init", "airflow"}
 BI_SERVICES = {"superset-init", "superset"}
@@ -31,8 +31,8 @@ REQUIRED_SERVICES = (
     CORE_SERVICES | STREAM_SERVICES | ORCHESTRATION_SERVICES | BI_SERVICES | BATCH_SERVICES
 )
 
-LONG_RUNNING_SERVICES = REQUIRED_SERVICES - {"airflow-init", "superset-init"}
-ONE_SHOT_SERVICES = {"airflow-init", "superset-init"}
+LONG_RUNNING_SERVICES = REQUIRED_SERVICES - {"airflow-init", "superset-init", "minio-init"}
+ONE_SHOT_SERVICES = {"airflow-init", "superset-init", "minio-init"}
 
 STATEFUL_VOLUMES = {
     "minio": {"minio-data"},
@@ -203,9 +203,11 @@ def test_trino_delta_catalog_contract() -> None:
     text = TRINO_DELTA_PATH.read_text()
     assert "connector.name=delta_lake" in text
     assert "hive.metastore.uri=thrift://hive-metastore:9083" in text
-    assert "hive.s3.endpoint=http://minio:9000" in text
-    assert "hive.s3.path-style-access=true" in text
-    assert "hive.s3.ssl.enabled=false" in text
+    assert "fs.native-s3.enabled=true" in text
+    assert "s3.endpoint=http://minio:9000" in text
+    assert "s3.region=us-east-1" in text
+    assert "s3.path-style-access=true" in text
+    assert "hive.s3." not in text
 
 
 def test_lake_warehouse_is_under_the_taxiflow_bucket() -> None:

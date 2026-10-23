@@ -52,10 +52,20 @@ env:
 	fi
 
 up: env
-	$(COMPOSE) --profile core --profile stream up -d --wait --wait-timeout 420
+	$(COMPOSE) --profile core --profile stream up -d --wait --wait-timeout 420 minio postgres
+	$(COMPOSE) --profile core --profile stream up -d minio-init
+	$(COMPOSE) --profile core --profile stream wait minio-init
+	$(COMPOSE) --profile core --profile stream up -d --wait --wait-timeout 420 --no-deps zookeeper kafka
+	$(COMPOSE) --profile core --profile stream up -d --wait --wait-timeout 420 --no-deps hive-metastore schema-registry
+	$(COMPOSE) --profile core --profile stream up -d --wait --wait-timeout 420 --no-deps trino debezium
 
 up-all: env
-	$(COMPOSE) $(RUNTIME_PROFILES) up -d --wait --wait-timeout 600
+	$(COMPOSE) $(RUNTIME_PROFILES) up -d --wait --wait-timeout 600 minio postgres
+	$(COMPOSE) $(RUNTIME_PROFILES) up -d minio-init airflow-init superset-init
+	$(COMPOSE) $(RUNTIME_PROFILES) wait minio-init airflow-init superset-init
+	$(COMPOSE) $(RUNTIME_PROFILES) up -d --wait --wait-timeout 600 --no-deps zookeeper kafka
+	$(COMPOSE) $(RUNTIME_PROFILES) up -d --wait --wait-timeout 600 --no-deps hive-metastore schema-registry
+	$(COMPOSE) $(RUNTIME_PROFILES) up -d --wait --wait-timeout 600 --no-deps trino debezium airflow superset
 
 down:
 	$(COMPOSE) $(PROFILES) down
@@ -73,7 +83,7 @@ images: env
 	$(COMPOSE) $(ALL_PROFILES) config --images | sort -u
 
 pull: env
-	$(COMPOSE) $(ALL_PROFILES) pull
+	$(COMPOSE) $(ALL_PROFILES) pull --ignore-buildable
 
 sync:
 	uv sync --frozen

@@ -40,6 +40,24 @@ services:
       retries: 12
       start_period: 20s
 
+  minio-init:
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
+    profiles: ["core"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing "local/$$S3_BUCKET"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET}
+    networks: [taxiflow]
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+
   postgres:
     image: postgres:15.19
     profiles: ["core", "orchestration", "bi"]
@@ -86,6 +104,19 @@ services:
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       S3_PATH_STYLE_ACCESS: "true"
       REGION: ""
+      GOOGLE_CLOUD_KEY_FILE_PATH: ""
+      AZURE_ADL_CLIENT_ID: ""
+      AZURE_ADL_CREDENTIAL: ""
+      AZURE_ADL_REFRESH_URL: ""
+      AZURE_ABFS_STORAGE_ACCOUNT: ""
+      AZURE_ABFS_ACCESS_KEY: ""
+      AZURE_WASB_STORAGE_ACCOUNT: ""
+      AZURE_ABFS_OAUTH: ""
+      AZURE_ABFS_OAUTH_TOKEN_PROVIDER: ""
+      AZURE_ABFS_OAUTH_CLIENT_ID: ""
+      AZURE_ABFS_OAUTH_SECRET: ""
+      AZURE_ABFS_OAUTH_ENDPOINT: ""
+      AZURE_WASB_ACCESS_KEY: ""
     ports:
       - "9083:9083"
     networks: [taxiflow]
@@ -113,7 +144,6 @@ services:
       - "8084:8080"
     volumes:
       - ./config/trino/etc:/etc/trino:ro
-      - ./config/trino/catalog:/etc/trino/catalog:ro
       - trino-data:/data/trino
     networks: [taxiflow]
     restart: unless-stopped
@@ -212,10 +242,10 @@ services:
       CONFIG_STORAGE_TOPIC: taxiflow_connect_configs
       OFFSET_STORAGE_TOPIC: taxiflow_connect_offsets
       STATUS_STORAGE_TOPIC: taxiflow_connect_statuses
-      KEY_CONVERTER: io.confluent.connect.avro.AvroConverter
-      VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
-      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
-      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
       CONNECT_TOPIC_CREATION_ENABLE: "true"
     ports:
       - "8083:8083"
@@ -285,7 +315,9 @@ services:
       start_period: 45s
 
   superset-init:
-    image: apache/superset:4.1.1
+    image: taxiflow/superset:4.1.1
+    build:
+      context: ./docker/superset
     profiles: ["bi"]
     command:
       - /bin/sh
@@ -304,7 +336,9 @@ services:
         condition: service_healthy
 
   superset:
-    image: apache/superset:4.1.1
+    image: taxiflow/superset:4.1.1
+    build:
+      context: ./docker/superset
     profiles: ["bi"]
     hostname: superset
     command:
