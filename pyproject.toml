@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "taxiflow"
+version = "0.1.0"
+description = "An NYC TLC batch + CDC lakehouse."
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = []
+
+[project.scripts]
+taxiflow = "taxiflow.__main__:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pyyaml>=6.0",
+  "ruff>=0.9",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/taxiflow"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra -m 'not integration'"
+markers = [
+  "integration: tests requiring the local Docker stack",
+  "contract: tests checking Compose, network, and table invariants",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

@@ -1,0 +1,3 @@
+CREATE DATABASE metastore;
+CREATE DATABASE airflow;
+CREATE DATABASE superset;
