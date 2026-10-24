@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
 from taxiflow import __version__
+from taxiflow.streaming.contract import (
+    COMPATIBILITY,
+    CONNECTOR_CONFIG_PATH,
+    VALUE_SUBJECT,
+    CdcError,
+    load_connector_config,
+)
+from taxiflow.streaming.registry import register_cdc, wait_for_latest_schema
 from taxiflow.tlc.manifest import (
     SERVICES,
     ChecksumError,
@@ -81,6 +90,70 @@ def _verify(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def _add_cdc_commands(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    cdc = subparsers.add_parser("cdc", help="register and inspect the CDC contract")
+    cdc_subparsers = cdc.add_subparsers(dest="cdc_command", required=True)
+
+    register = cdc_subparsers.add_parser(
+        "register",
+        help="register the Postgres connector and enforce Avro compatibility",
+    )
+    register.add_argument(
+        "--connector-config",
+        type=Path,
+        default=CONNECTOR_CONFIG_PATH,
+        help="connector payload with environment placeholders",
+    )
+    register.add_argument(
+        "--debezium-url",
+        default="http://localhost:8083",
+        help="Kafka Connect REST base URL",
+    )
+    register.add_argument(
+        "--schema-registry-url",
+        default="http://localhost:8081",
+        help="Schema Registry base URL",
+    )
+    register.add_argument("--compatibility", default=COMPATIBILITY)
+    register.add_argument("--timeout", type=float, default=120.0)
+    register.set_defaults(handler=_register_cdc)
+
+    schema = cdc_subparsers.add_parser("schema", help="print the latest Avro schema")
+    schema.add_argument(
+        "--schema-registry-url",
+        default="http://localhost:8081",
+        help="Schema Registry base URL",
+    )
+    schema.add_argument("--subject", default=VALUE_SUBJECT)
+    schema.add_argument("--timeout", type=float, default=120.0)
+    schema.set_defaults(handler=_print_schema)
+
+
+def _register_cdc(args: argparse.Namespace) -> int:
+    payload = load_connector_config(args.connector_config)
+    result = register_cdc(
+        args.debezium_url,
+        args.schema_registry_url,
+        payload,
+        compatibility=args.compatibility,
+        timeout=args.timeout,
+    )
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+def _print_schema(args: argparse.Namespace) -> int:
+    schema = wait_for_latest_schema(
+        args.schema_registry_url,
+        args.subject,
+        timeout=args.timeout,
+    )
+    print(json.dumps(schema, indent=2, sort_keys=True))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level CLI parser."""
     parser = argparse.ArgumentParser(
@@ -94,6 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command")
     _add_tlc_commands(subparsers)
+    _add_cdc_commands(subparsers)
     return parser
 
 
@@ -105,7 +179,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     try:
         result: int = handler(args)
-    except (ManifestError, ChecksumError, FileNotFoundError) as exc:
+    except (ManifestError, ChecksumError, CdcError, FileNotFoundError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     return result

@@ -1,0 +1,25 @@
+{
+  "type": "record",
+  "name": "TaxiTripEvent",
+  "namespace": "taxiflow.iot",
+  "doc": "Unwrapped Debezium change event for iot.taxi_nyc_time_series. The source row owns trip_id; Spark derives event_date and ingested_at.",
+  "fields": [
+    {"name": "trip_id", "type": "string", "doc": "Stable source-generated trip key."},
+    {"name": "vendor_id", "type": "int"},
+    {"name": "pickup_datetime", "type": "long", "logicalType": "timestamp-millis"},
+    {"name": "dropoff_datetime", "type": "long", "logicalType": "timestamp-millis"},
+    {"name": "passenger_count", "type": ["null", "int"], "default": null},
+    {"name": "trip_distance", "type": ["null", "string"], "default": null},
+    {"name": "fare_amount", "type": ["null", "string"], "default": null},
+    {"name": "tip_amount", "type": ["null", "string"], "default": null},
+    {"name": "total_amount", "type": ["null", "string"], "default": null},
+    {"name": "payment_type", "type": ["null", "int"], "default": null},
+    {"name": "pickup_zone_id", "type": ["null", "int"], "default": null},
+    {"name": "dropoff_zone_id", "type": ["null", "int"], "default": null},
+    {"name": "service", "type": "string"},
+    {"name": "updated_at", "type": "long", "logicalType": "timestamp-millis"},
+    {"name": "__op", "type": "string", "doc": "Debezium operation: c, r, u, or d."},
+    {"name": "__source_ts_ms", "type": "long", "doc": "Source commit timestamp in epoch milliseconds."},
+    {"name": "__deleted", "type": ["null", "string"], "default": null}
+  ]
+}

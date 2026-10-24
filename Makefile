@@ -1,14 +1,17 @@
 SHELL := /bin/bash
 COMPOSE := docker compose -f compose.yaml
 SPARK_PACKAGES := io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262
+CDC_SPARK_PACKAGES := $(SPARK_PACKAGES),org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1,org.apache.spark:spark-avro_2.12:3.5.1
+CDC_STREAM_JOB := /opt/taxiflow/src/taxiflow/jobs/stream_cdc_bronze.py
 SPARK_SUBMIT := /opt/spark/bin/spark-submit --master "local[4]" --driver-memory 4g --conf spark.driver.maxResultSize=1g --conf spark.sql.shuffle.partitions=16 --packages "$(SPARK_PACKAGES)" --conf spark.jars.ivy=/tmp/.ivy2
+SPARK_STREAM_SUBMIT := /opt/spark/bin/spark-submit --master "local[2]" --driver-memory 2g --conf spark.driver.maxResultSize=1g --conf spark.sql.shuffle.partitions=8 --packages "$(CDC_SPARK_PACKAGES)" --conf spark.jars.ivy=/tmp/.ivy2
 TRINO_CLI := $(COMPOSE) --profile core exec -T trino trino --output-format TSV
 RUNTIME_PROFILES := --profile core --profile stream --profile orchestration --profile bi
 ALL_PROFILES := $(RUNTIME_PROFILES) --profile batch
 PROFILES := $(ALL_PROFILES)
 S3_BUCKET ?= taxiflow
 
-.PHONY: help env up up-all down reset logs ps images pull sync lock seed batch batch-report dbt-debug dbt-build register-sources test test-contract test-integration lint format compose-check verify
+.PHONY: help env up up-all down reset logs ps images pull sync lock seed batch batch-report cdc-init cdc-seed cdc-register cdc-start cdc-stop cdc-report cdc-replay dbt-debug dbt-build register-sources test test-contract test-integration lint format compose-check verify
 
 help:
 	@printf '%s\n' \
@@ -25,6 +28,13 @@ help:
 		'make seed          Download and verify TLC source files' \
 		'make batch         Run one TLC month into Delta bronze' \
 		'make batch-report  Read back bronze counts and sums' \
+		'make cdc-init      Apply the Postgres iot source schema' \
+		'make cdc-seed      Insert deterministic synthetic CDC source rows' \
+		'make cdc-register  Register Debezium and pin Avro compatibility' \
+		'make cdc-start     Start the synthetic generator and streaming worker' \
+		'make cdc-stop      Stop the CDC generator and streaming worker' \
+		'make cdc-report    Print CDC bronze counts and freshness' \
+		'make cdc-replay    Replay a deterministic CDC batch twice' \
 		'make register-sources  Register bronze Delta tables with Trino' \
 		'make dbt-debug     Check the dbt Trino connection' \
 		'make dbt-build     Build dbt seeds, models, and tests' \
@@ -103,6 +113,9 @@ lock:
 
 seed: env
 	uv run taxiflow tlc download --manifest config/tlc_manifest.json
+	$(MAKE) cdc-init
+	$(MAKE) cdc-register
+	$(MAKE) cdc-start
 
 batch: env
 	$(COMPOSE) --profile core up -d --wait minio
@@ -110,6 +123,30 @@ batch: env
 
 batch-report: env
 	$(COMPOSE) --profile core --profile batch run --rm --no-deps spark $(SPARK_SUBMIT) /opt/taxiflow/src/taxiflow/jobs/report_bronze.py
+
+cdc-init: env
+	$(COMPOSE) --profile core --profile stream up -d --wait postgres
+	$(COMPOSE) --profile core --profile stream exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/02-iot.sql'
+
+cdc-seed: env
+	$(COMPOSE) --profile core --profile stream exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "SELECT iot.seed_synthetic_trips(5);"'
+
+cdc-register: env
+	set -a; . ./.env; set +a; uv run taxiflow cdc register --debezium-url http://localhost:8083 --schema-registry-url http://localhost:8081 --timeout 180
+
+cdc-start: env
+	@echo "starting stream-generator and spark-stream ($(CDC_STREAM_JOB))"
+	SPARK_STREAM_PACKAGES="$(CDC_SPARK_PACKAGES)" $(COMPOSE) --profile core --profile stream up -d --wait --wait-timeout 600 stream-generator spark-stream
+
+cdc-stop: env
+	$(COMPOSE) --profile core --profile stream stop stream-generator spark-stream
+
+cdc-report: env
+	$(COMPOSE) --profile core --profile stream run --rm --no-deps -T spark-stream $(SPARK_STREAM_SUBMIT) /opt/taxiflow/src/taxiflow/jobs/report_cdc.py --max-freshness-seconds 60
+
+cdc-replay: env
+	$(COMPOSE) --profile core --profile stream up -d --wait minio
+	TAXIFLOW_REQUIRE_STACK=1 uv run pytest -q -m integration tests/integration/test_cdc_stream_stack.py
 
 register-sources: env
 	@$(TRINO_CLI) --execute "CREATE SCHEMA IF NOT EXISTS delta.default" >/dev/null

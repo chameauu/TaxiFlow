@@ -1,0 +1,32 @@
+{
+  "name": "taxiflow-iot",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "${POSTGRES_USER}",
+    "database.password": "${POSTGRES_PASSWORD}",
+    "database.dbname": "${POSTGRES_DB}",
+    "topic.prefix": "taxiflow",
+    "table.include.list": "iot.taxi_nyc_time_series",
+    "plugin.name": "pgoutput",
+    "slot.name": "taxiflow_iot",
+    "publication.autocreate.mode": "filtered",
+    "snapshot.mode": "initial",
+    "key.converter": "io.confluent.connect.avro.AvroConverter",
+    "key.converter.schema.registry.url": "http://schema-registry:8081",
+    "value.converter": "io.confluent.connect.avro.AvroConverter",
+    "value.converter.schema.registry.url": "http://schema-registry:8081",
+    "decimal.handling.mode": "string",
+    "time.precision.mode": "connect",
+    "tombstones.on.delete": "true",
+    "heartbeat.interval.ms": "10000",
+    "producer.override.compression.type": "snappy",
+    "transforms": "unwrap",
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.unwrap.drop.tombstones": "true",
+    "transforms.unwrap.delete.handling.mode": "rewrite",
+    "transforms.unwrap.add.fields": "op,source.ts_ms"
+  }
+}

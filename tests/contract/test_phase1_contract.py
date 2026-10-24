@@ -24,14 +24,25 @@ CI_PATH = PROJECT_ROOT / ".github" / "workflows" / "ci.yml"
 
 CORE_SERVICES = {"minio", "minio-init", "postgres", "hive-metastore", "trino"}
 STREAM_SERVICES = {"zookeeper", "kafka", "schema-registry", "debezium"}
+CDC_SERVICES = {"stream-generator", "spark-stream"}
 ORCHESTRATION_SERVICES = {"airflow-init", "airflow"}
 BI_SERVICES = {"superset-init", "superset"}
 BATCH_SERVICES = {"spark"}
 REQUIRED_SERVICES = (
-    CORE_SERVICES | STREAM_SERVICES | ORCHESTRATION_SERVICES | BI_SERVICES | BATCH_SERVICES
+    CORE_SERVICES
+    | STREAM_SERVICES
+    | CDC_SERVICES
+    | ORCHESTRATION_SERVICES
+    | BI_SERVICES
+    | BATCH_SERVICES
 )
 
-LONG_RUNNING_SERVICES = REQUIRED_SERVICES - {"airflow-init", "superset-init", "minio-init"}
+LONG_RUNNING_SERVICES = REQUIRED_SERVICES - {
+    "airflow-init",
+    "superset-init",
+    "minio-init",
+    *CDC_SERVICES,
+}
 ONE_SHOT_SERVICES = {"airflow-init", "superset-init", "minio-init"}
 
 STATEFUL_VOLUMES = {
@@ -133,7 +144,7 @@ def test_all_required_services_exist() -> None:
 def test_each_service_has_the_expected_profiles() -> None:
     expected = {
         **{name: {"core"} for name in CORE_SERVICES if name != "postgres"},
-        **{name: {"stream"} for name in STREAM_SERVICES},
+        **{name: {"stream"} for name in STREAM_SERVICES | CDC_SERVICES},
         **{name: {"orchestration"} for name in ORCHESTRATION_SERVICES},
         **{name: {"bi"} for name in BI_SERVICES},
         **{name: {"batch"} for name in BATCH_SERVICES},

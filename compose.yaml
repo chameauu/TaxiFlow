@@ -234,7 +234,9 @@ services:
       start_period: 20s
 
   debezium:
-    image: debezium/connect:2.5.1.Final
+    build:
+      context: ./docker/debezium
+    image: taxiflow/debezium:2.5.1-avro
     profiles: ["stream"]
     hostname: debezium
     environment:
@@ -243,10 +245,12 @@ services:
       CONFIG_STORAGE_TOPIC: taxiflow_connect_configs
       OFFSET_STORAGE_TOPIC: taxiflow_connect_offsets
       STATUS_STORAGE_TOPIC: taxiflow_connect_statuses
-      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
-      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      KEY_CONVERTER: io.confluent.connect.avro.AvroConverter
+      VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "true"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "true"
       CONNECT_TOPIC_CREATION_ENABLE: "true"
     ports:
       - "8083:8083"
@@ -263,6 +267,64 @@ services:
       timeout: 5s
       retries: 18
       start_period: 20s
+
+  stream-generator:
+    image: postgres:15.19
+    profiles: ["stream"]
+    entrypoint: ["/bin/bash", "/opt/taxiflow/config/postgres/stream-generator.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      TAXIFLOW_EVENT_INTERVAL: ${TAXIFLOW_EVENT_INTERVAL:-5}
+    volumes:
+      - ./config/postgres/stream-generator.sh:/opt/taxiflow/config/postgres/stream-generator.sh:ro
+    networks: [taxiflow]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  spark-stream:
+    image: apache/spark:3.5.1
+    profiles: ["stream"]
+    hostname: spark-stream
+    user: root
+    command:
+      - /opt/spark/bin/spark-submit
+      - --master
+      - "local[2]"
+      - --driver-memory
+      - 2g
+      - --conf
+      - spark.sql.shuffle.partitions=8
+      - --packages
+      - "${SPARK_STREAM_PACKAGES:-io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1,org.apache.spark:spark-avro_2.12:3.5.1}"
+      - --conf
+      - spark.jars.ivy=/tmp/.ivy2
+      - /opt/taxiflow/src/taxiflow/jobs/stream_cdc_bronze.py
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+      PYTHONPATH: /opt/taxiflow/src
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET}
+      S3A_ENDPOINT: http://minio:9000
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+    volumes:
+      - ./:/opt/taxiflow:ro
+      - spark-ivy:/tmp/.ivy2
+    networks: [taxiflow]
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
 
   airflow-init:
     image: apache/airflow:2.9.3-python3.11
