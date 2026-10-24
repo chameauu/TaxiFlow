@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "service": "yellow",
+      "year": 2024,
+      "month": 1,
+      "url": "https://example.invalid/yellow_tripdata_fixture.parquet",
+      "path": "tests/fixtures/tlc/yellow_tripdata_fixture.parquet",
+      "size_bytes": 6186,
+      "sha256": "0a74321c9b67f4f9debaefc72f8e3a2a9bd44e929d3aedd4e5a938c1fa14eb3c",
+      "rows": 6
+    }
+  ]
+}

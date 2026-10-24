@@ -12,6 +12,7 @@ volumes:
   zookeeper-log:
   kafka-data:
   airflow-logs:
+  spark-ivy:
 
 services:
   minio:
@@ -377,8 +378,17 @@ services:
     profiles: ["batch"]
     hostname: spark
     command: ["sleep", "infinity"]
+    user: root
     environment:
       SPARK_NO_DAEMONIZE: "true"
+      PYTHONPATH: /opt/taxiflow/src
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET}
+      S3A_ENDPOINT: http://minio:9000
+    volumes:
+      - ./:/opt/taxiflow:ro
+      - spark-ivy:/tmp/.ivy2
     networks: [taxiflow]
     restart: unless-stopped
     healthcheck:
