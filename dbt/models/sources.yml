@@ -1,0 +1,24 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: Delta bronze written by the Spark batch job.
+    database: "{{ env_var('TRINO_CATALOG', 'delta') }}"
+    schema: "{{ env_var('TRINO_BRONZE_SCHEMA', 'default') }}"
+    tables:
+      - name: tlc_trips
+        description: One row per accepted TLC trip, with provenance and deterministic trip_id.
+        columns:
+          - name: trip_id
+            description: Deterministic identity derived from source provenance and row content.
+          - name: tpep_pickup_datetime
+            description: Source wall-clock pickup timestamp preserved in bronze.
+          - name: ingested_at
+            description: Batch ingest timestamp.
+      - name: tlc_quarantine
+        description: Rejected TLC rows with a reason and raw JSON payload.
+        columns:
+          - name: quarantine_id
+            description: Deterministic identity for the rejected row and reason.
+          - name: quarantine_reason
+            description: Contract reason the row was rejected.

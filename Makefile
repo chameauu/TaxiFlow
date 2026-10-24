@@ -2,11 +2,13 @@ SHELL := /bin/bash
 COMPOSE := docker compose -f compose.yaml
 SPARK_PACKAGES := io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262
 SPARK_SUBMIT := /opt/spark/bin/spark-submit --master "local[4]" --driver-memory 4g --conf spark.driver.maxResultSize=1g --conf spark.sql.shuffle.partitions=16 --packages "$(SPARK_PACKAGES)" --conf spark.jars.ivy=/tmp/.ivy2
+TRINO_CLI := $(COMPOSE) --profile core exec -T trino trino --output-format TSV
 RUNTIME_PROFILES := --profile core --profile stream --profile orchestration --profile bi
 ALL_PROFILES := $(RUNTIME_PROFILES) --profile batch
 PROFILES := $(ALL_PROFILES)
+S3_BUCKET ?= taxiflow
 
-.PHONY: help env up up-all down reset logs ps images pull sync lock seed batch batch-report test test-contract test-integration lint format compose-check verify
+.PHONY: help env up up-all down reset logs ps images pull sync lock seed batch batch-report dbt-debug dbt-build register-sources test test-contract test-integration lint format compose-check verify
 
 help:
 	@printf '%s\n' \
@@ -23,6 +25,9 @@ help:
 		'make seed          Download and verify TLC source files' \
 		'make batch         Run one TLC month into Delta bronze' \
 		'make batch-report  Read back bronze counts and sums' \
+		'make register-sources  Register bronze Delta tables with Trino' \
+		'make dbt-debug     Check the dbt Trino connection' \
+		'make dbt-build     Build dbt seeds, models, and tests' \
 		'make lock          Regenerate uv.lock' \
 		'make test          Run unit tests' \
 		'make test-contract Run Compose and config contract tests' \
@@ -105,6 +110,28 @@ batch: env
 
 batch-report: env
 	$(COMPOSE) --profile core --profile batch run --rm --no-deps spark $(SPARK_SUBMIT) /opt/taxiflow/src/taxiflow/jobs/report_bronze.py
+
+register-sources: env
+	@$(TRINO_CLI) --execute "CREATE SCHEMA IF NOT EXISTS delta.default" >/dev/null
+	@$(TRINO_CLI) --execute "CREATE SCHEMA IF NOT EXISTS delta.analytics" >/dev/null
+	@for schema in silver gold reference; do \
+		$(TRINO_CLI) --execute "CREATE SCHEMA IF NOT EXISTS delta.$$schema" >/dev/null; \
+	done
+	@for table in tlc_trips tlc_quarantine; do \
+		count=$$($(TRINO_CLI) --execute "SELECT count(*) FROM delta.information_schema.tables WHERE table_schema = 'default' AND table_name = '$$table'" 2>/dev/null | tail -n 1); \
+		if [ "$$count" = "0" ]; then \
+			echo "registering delta.default.$$table"; \
+			$(TRINO_CLI) --execute "CALL delta.system.register_table(schema_name => 'default', table_name => '$$table', table_location => 's3://$(S3_BUCKET)/bronze/$$table')"; \
+		else \
+			echo "delta.default.$$table already registered"; \
+		fi; \
+	done
+
+dbt-debug: env register-sources
+	uv run dbt debug --project-dir dbt --profiles-dir dbt
+
+dbt-build: env register-sources
+	uv run dbt build --project-dir dbt --profiles-dir dbt
 
 test:
 	uv run pytest -q -m "not integration and not contract"

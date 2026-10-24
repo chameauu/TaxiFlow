@@ -1,0 +1,37 @@
+select
+    trip_id,
+    vendor_id,
+    pickup_at,
+    dropoff_at,
+    cast(pickup_at at time zone 'America/New_York' as date) as pickup_date,
+    hour(pickup_at at time zone 'America/New_York') as pickup_hour,
+    day_of_week(pickup_at at time zone 'America/New_York') as pickup_day_of_week,
+    pickup_location_id,
+    pickup_zone,
+    pickup_borough,
+    dropoff_location_id,
+    dropoff_zone,
+    dropoff_borough,
+    passenger_count,
+    trip_distance,
+    ratecode_id,
+    payment_type,
+    fare_amount,
+    extra,
+    mta_tax,
+    tip_amount,
+    tolls_amount,
+    improvement_surcharge,
+    total_amount,
+    congestion_surcharge,
+    airport_fee,
+    case when tip_amount > 0 then true else false end as is_tipped,
+    case
+        when fare_amount > 0 then cast(tip_amount / fare_amount as double)
+        else null
+    end as tip_rate,
+    service,
+    source_file,
+    source_row_number,
+    ingested_at
+from {{ ref('int_trips_enriched') }}

@@ -1,0 +1,12 @@
+taxiflow:
+  target: dev
+  outputs:
+    dev:
+      type: trino
+      method: none
+      user: "{{ env_var('TRINO_USER', 'taxiflow') }}"
+      host: "{{ env_var('TRINO_HOST', 'localhost') }}"
+      port: "{{ env_var('TRINO_PORT', '8084') | int }}"
+      database: "{{ env_var('TRINO_CATALOG', 'delta') }}"
+      schema: "{{ env_var('DBT_SCHEMA', 'analytics') }}"
+      threads: 4

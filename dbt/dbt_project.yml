@@ -1,0 +1,36 @@
+name: taxiflow
+version: "1.0.0"
+config-version: 2
+
+profile: taxiflow
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  taxiflow:
+    staging:
+      +materialized: view
+      +schema: silver
+    intermediate:
+      +materialized: table
+      +schema: silver
+      +on_table_exists: drop
+    marts:
+      +materialized: table
+      +schema: gold
+      +on_table_exists: drop
+
+seeds:
+  taxiflow:
+    taxi_zone_lookup:
+      +schema: reference
+      +column_types:
+        LocationID: integer
+        Borough: varchar
+        Zone: varchar
+        service_zone: varchar

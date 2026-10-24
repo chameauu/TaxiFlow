@@ -2,7 +2,7 @@
 
 An NYC TLC batch + CDC lakehouse.
 
-**Status:** Phases 0–2 complete locally. Phase 3 (dbt silver/gold) is next.
+**Status:** Phases 0–3 complete locally. Phase 4 (CDC bronze) is next.
 
 The target architecture, phases, and exit gates are in `../PLAN.md`.
 Current status and decisions are in `../PROGRESS.md`.
@@ -15,11 +15,16 @@ A learning-oriented explanation is in `../understanding/`.
   Debezium, Airflow, and Superset.
 - A checksum-pinned TLC manifest and `taxiflow tlc download|verify` CLI.
 - A Spark batch job that writes replay-safe Delta bronze and quarantine tables in MinIO.
-- Trino readback of the bronze table through the Delta connector.
+- dbt staging, intermediate, and gold models on Trino, with 66 data tests and
+  reconciliation checks over 2,964,606 trips.
+- Trino readback of bronze and gold tables through the Delta connector.
 
 ```text
 TLC monthly Parquet ── batch_bronze ──► Delta bronze (MinIO)
                                └──────► quarantine (MinIO)
+                                               │
+                                               ▼
+                                  dbt on Trino (silver → gold)
                                                │
                                                ▼
                                       Trino (Delta connector)
@@ -39,11 +44,13 @@ uv sync --frozen
 make up
 make seed
 make batch
+make dbt-build
 make batch-report
 ```
 
 `make seed` downloads and verifies the pinned 2024-01 yellow TLC file. `make batch`
-writes Delta bronze and quarantine tables. `make batch-report` reads them back.
+writes Delta bronze and quarantine tables. `make dbt-build` loads the taxi-zone seed,
+builds silver/gold models, and runs the dbt tests. `make batch-report` reads bronze back.
 
 ## Verify
 
@@ -52,18 +59,20 @@ uv run ruff check .
 uv run pytest -q
 uv run pytest -q -m contract
 uv run pytest -q -m integration
+uv run dbt build --project-dir dbt --profiles-dir dbt
 docker compose config -q
 ```
 
 The integration suite needs the local stack and Spark. It includes a two-run replay
-test for the batch job.
+test for the batch job. The dbt build needs Trino plus the registered Delta bronze
+tables; `make dbt-build` registers them first.
 
 ## Layout
 
 ```text
 src/taxiflow/       Python package, CLI, TLC contracts, Spark jobs
 tests/              unit, contract, integration, and tiny Parquet fixtures
-dbt/                dbt project (Phase 3)
+dbt/                dbt project: seeds, staging, intermediate, marts, tests
 airflow/            Airflow DAGs (Phase 5)
 config/             TLC manifest and service configuration
 compose.yaml        one local Compose project

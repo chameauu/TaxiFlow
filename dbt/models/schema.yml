@@ -1,0 +1,239 @@
+version: 2
+
+models:
+  - name: stg_yellow_trips
+    description: Typed TLC yellow trips with source timestamps expressed as America/New_York.
+    columns:
+      - name: trip_id
+        data_tests:
+          - not_null
+          - unique
+      - name: service
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['yellow', 'green']
+      - name: pickup_at
+        data_tests:
+          - not_null
+      - name: total_amount
+        data_tests:
+          - not_null
+
+  - name: stg_taxi_zones
+    description: Versioned taxi zone lookup.
+    columns:
+      - name: location_id
+        data_tests:
+          - not_null
+          - unique
+      - name: borough
+        data_tests:
+          - not_null
+      - name: zone_name
+        data_tests:
+          - not_null
+
+  - name: int_trips_enriched
+    description: Deduplicated trips enriched with pickup and dropoff zone names.
+    columns:
+      - name: trip_id
+        data_tests:
+          - not_null
+          - unique
+      - name: pickup_borough
+        data_tests:
+          - not_null
+      - name: dropoff_borough
+        data_tests:
+          - not_null
+
+  - name: dim_zones
+    description: Taxi zone dimension.
+    columns:
+      - name: location_id
+        data_tests:
+          - not_null
+          - unique
+      - name: borough
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - Bronx
+                  - Brooklyn
+                  - EWR
+                  - Manhattan
+                  - N/A
+                  - Queens
+                  - Staten Island
+                  - Unknown
+      - name: zone_name
+        data_tests:
+          - not_null
+
+  - name: fct_trips
+    description: One row per accepted trip, with local pickup date, hour, and weekday.
+    columns:
+      - name: trip_id
+        data_tests:
+          - not_null
+          - unique
+      - name: pickup_at
+        data_tests:
+          - not_null
+      - name: pickup_date
+        data_tests:
+          - not_null
+      - name: pickup_hour
+        data_tests:
+          - not_null
+      - name: pickup_day_of_week
+        data_tests:
+          - not_null
+      - name: pickup_location_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_zones')
+                field: location_id
+      - name: dropoff_location_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_zones')
+                field: location_id
+      - name: pickup_borough
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - Bronx
+                  - Brooklyn
+                  - EWR
+                  - Manhattan
+                  - N/A
+                  - Queens
+                  - Staten Island
+                  - Unknown
+      - name: dropoff_borough
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - Bronx
+                  - Brooklyn
+                  - EWR
+                  - Manhattan
+                  - N/A
+                  - Queens
+                  - Staten Island
+                  - Unknown
+      - name: payment_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1, 2, 3, 4, 5, 6]
+                quote: false
+      - name: total_amount
+        data_tests:
+          - not_null
+
+  - name: agg_daily_trips
+    description: Daily trips and revenue by service.
+    columns:
+      - name: daily_key
+        data_tests:
+          - not_null
+          - unique
+      - name: trip_count
+        data_tests:
+          - not_null
+      - name: total_revenue
+        data_tests:
+          - not_null
+
+  - name: agg_hourly_demand
+    description: Demand by weekday, hour, pickup zone, and service.
+    columns:
+      - name: demand_key
+        data_tests:
+          - not_null
+          - unique
+      - name: trip_count
+        data_tests:
+          - not_null
+      - name: pickup_borough
+        data_tests:
+          - not_null
+
+  - name: agg_zone_daily
+    description: Daily trips, passengers, and revenue by pickup zone, vendor, and service.
+    columns:
+      - name: zone_daily_key
+        data_tests:
+          - not_null
+          - unique
+      - name: trip_count
+        data_tests:
+          - not_null
+      - name: total_revenue
+        data_tests:
+          - not_null
+      - name: vendor_id
+        data_tests:
+          - not_null
+
+  - name: agg_tip_rate
+    description: Tip rate by payment type and pickup borough.
+    columns:
+      - name: tip_key
+        data_tests:
+          - not_null
+          - unique
+      - name: payment_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1, 2, 3, 4, 5, 6]
+                quote: false
+      - name: pickup_borough
+        data_tests:
+          - not_null
+      - name: trip_count
+        data_tests:
+          - not_null
+
+  - name: fct_quality_reasons
+    description: Quarantine counts by reason.
+    columns:
+      - name: quarantine_reason
+        data_tests:
+          - not_null
+          - unique
+      - name: quarantined_rows
+        data_tests:
+          - not_null
+
+  - name: quality_summary
+    description: One-row freshness and quality summary.
+    columns:
+      - name: bronze_trip_rows
+        data_tests:
+          - not_null
+      - name: max_bronze_ingested_at
+        data_tests:
+          - not_null
+      - name: quarantine_rows
+        data_tests:
+          - not_null
+      - name: freshness_seconds
+        data_tests:
+          - not_null

@@ -20,3 +20,6 @@ logs/
 checkpoints/
 target/
 dbt_packages/
+
+# dbt local state
+.user.yml
