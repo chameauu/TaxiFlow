@@ -51,7 +51,7 @@ Postgres iot.* ── Debezium ──► Kafka ──► Spark Structured Stream
 
 ```bash
 make env
-uv sync --frozen
+uv sync --frozen --group quality
 make up
 make seed
 make batch

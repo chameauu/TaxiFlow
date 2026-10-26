@@ -107,7 +107,7 @@ pull: env
 	$(COMPOSE) $(ALL_PROFILES) pull --ignore-buildable
 
 sync:
-	uv sync --frozen
+	uv sync --frozen --group quality
 
 lock:
 	uv lock

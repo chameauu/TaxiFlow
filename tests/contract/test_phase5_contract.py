@@ -16,6 +16,8 @@ pytestmark = pytest.mark.contract
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_PATH = PROJECT_ROOT / "compose.yaml"
 MAKEFILE_PATH = PROJECT_ROOT / "Makefile"
+CI_WORKFLOW_PATH = PROJECT_ROOT / ".github" / "workflows" / "ci.yml"
+README_PATH = PROJECT_ROOT / "README.md"
 AIRFLOW_ROOT = PROJECT_ROOT / "airflow"
 AIRFLOW_DOCKERFILE = PROJECT_ROOT / "docker" / "airflow" / "Dockerfile"
 DAG_PATH = AIRFLOW_ROOT / "dags" / "taxiflow_pipeline.py"
@@ -95,6 +97,13 @@ def test_makefile_exposes_quality_and_batch_orchestration() -> None:
     assert "taxiflow quality run" in makefile
     assert "make quality" in makefile
     assert "make batch" in makefile
+
+
+def test_every_documented_sync_installs_the_quality_test_dependencies() -> None:
+    """Phase 5 unit tests import pandas, so every clean sync must include the quality group."""
+    assert "uv sync --frozen --group quality" in CI_WORKFLOW_PATH.read_text()
+    assert "uv sync --frozen --group quality" in MAKEFILE_PATH.read_text()
+    assert "uv sync --frozen --group quality" in README_PATH.read_text()
 
 
 def test_ops_schema_records_runs_and_alerts() -> None:
