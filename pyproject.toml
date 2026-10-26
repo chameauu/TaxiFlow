@@ -20,6 +20,15 @@ dev = [
   "pyyaml>=6.0",
   "ruff>=0.9",
 ]
+quality = [
+  "great-expectations==0.18.22",
+  "pandas>=2.0,<2.3",
+  "psycopg[binary]>=3.2,<4",
+  "trino==0.330.0",
+]
+orchestration = [
+  "pyspark==3.5.1",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/taxiflow"]

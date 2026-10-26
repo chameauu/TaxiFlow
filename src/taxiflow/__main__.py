@@ -6,9 +6,21 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
 from taxiflow import __version__
+from taxiflow.quality.metadata import (
+    MetadataError,
+    connect_postgres,
+    ensure_schema,
+    list_runs,
+    parse_metrics_line,
+    record_failure,
+    record_payload,
+)
+from taxiflow.quality.runner import QualityConfig, QualityError, print_report, run_quality
+from taxiflow.quality.suites import SuiteError
 from taxiflow.streaming.contract import (
     COMPATIBILITY,
     CONNECTOR_CONFIG_PATH,
@@ -154,6 +166,122 @@ def _print_schema(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_quality_commands(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    quality = subparsers.add_parser("quality", help="run bronze/silver quality gates")
+    quality_subparsers = quality.add_subparsers(dest="quality_command", required=True)
+    run = quality_subparsers.add_parser(
+        "run",
+        help="run GX suites and cross-layer reconciliation",
+    )
+    run.add_argument(
+        "--max-freshness-seconds",
+        type=int,
+        help="override TAXIFLOW_QUALITY_MAX_FRESHNESS_SECONDS",
+    )
+    run.add_argument(
+        "--sample-limit",
+        type=int,
+        help="override TAXIFLOW_QUALITY_SAMPLE_LIMIT",
+    )
+    run.add_argument(
+        "--no-record",
+        action="store_true",
+        help="skip Postgres run metadata",
+    )
+    run.set_defaults(handler=_quality_run)
+
+    runs = subparsers.add_parser("runs", help="inspect and record pipeline runs")
+    run_subparsers = runs.add_subparsers(dest="runs_command", required=True)
+
+    record = run_subparsers.add_parser("record", help="record one successful run")
+    record.add_argument("--kind", required=True, choices=("batch", "dbt", "quality", "airflow"))
+    record.add_argument("--payload", help="JSON payload, for example TAXIFLOW_METRICS")
+    record.add_argument("--payload-file", type=Path)
+    record.add_argument("--batch-log", type=Path, help="log containing TAXIFLOW_METRICS=")
+    record.add_argument("--status", default="success", choices=("success", "failed"))
+    record.add_argument("--airflow-run-id")
+    record.set_defaults(handler=_runs_record)
+
+    failure = run_subparsers.add_parser("failure", help="record a failed run and alert")
+    failure.add_argument("--kind", required=True, choices=("batch", "dbt", "quality", "airflow"))
+    failure.add_argument("--message", required=True)
+    failure.add_argument("--task-id")
+    failure.add_argument("--run-id")
+    failure.add_argument("--airflow-run-id")
+    failure.set_defaults(handler=_runs_failure)
+
+    ensure = run_subparsers.add_parser("ensure-schema", help="create ops tables")
+    ensure.set_defaults(handler=_runs_ensure)
+
+    show = run_subparsers.add_parser("show", help="print recent runs")
+    show.add_argument("--limit", type=int, default=10)
+    show.set_defaults(handler=_runs_show)
+
+
+def _quality_run(args: argparse.Namespace) -> int:
+    config = QualityConfig.from_env()
+    if args.max_freshness_seconds is not None:
+        config = replace(config, max_freshness_seconds=args.max_freshness_seconds)
+    if args.sample_limit is not None:
+        config = replace(config, sample_limit=args.sample_limit)
+    report = run_quality(config, record=not args.no_record)
+    print_report(report)
+    return 0 if report.success else 1
+
+
+def _load_payload(args: argparse.Namespace) -> dict[str, object]:
+    if args.batch_log is not None:
+        return parse_metrics_line(args.batch_log.read_text())
+    if args.payload_file is not None:
+        payload = json.loads(args.payload_file.read_text())
+    elif args.payload is not None:
+        payload = json.loads(args.payload)
+    else:
+        payload = {}
+    if not isinstance(payload, dict):
+        raise MetadataError("run payload must be a JSON object")
+    return payload
+
+
+def _runs_record(args: argparse.Namespace) -> int:
+    record = record_payload(
+        kind=args.kind,
+        payload=_load_payload(args),
+        status=args.status,
+        airflow_run_id=args.airflow_run_id,
+    )
+    print(record.run_id)
+    return 0
+
+
+def _runs_failure(args: argparse.Namespace) -> int:
+    record_failure(
+        kind=args.kind,
+        message=args.message,
+        task_id=args.task_id,
+        run_id=args.run_id,
+        airflow_run_id=args.airflow_run_id,
+    )
+    return 0
+
+
+def _runs_ensure(args: argparse.Namespace) -> int:
+    connection = connect_postgres()
+    try:
+        ensure_schema(connection)
+    finally:
+        connection.close()
+    print("ops schema ready")
+    return 0
+
+
+def _runs_show(args: argparse.Namespace) -> int:
+    print(json.dumps(list_runs(args.limit), indent=2, sort_keys=True, default=str))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level CLI parser."""
     parser = argparse.ArgumentParser(
@@ -168,6 +296,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
     _add_tlc_commands(subparsers)
     _add_cdc_commands(subparsers)
+    _add_quality_commands(subparsers)
     return parser
 
 
@@ -179,7 +308,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     try:
         result: int = handler(args)
-    except (ManifestError, ChecksumError, CdcError, FileNotFoundError) as exc:
+    except (
+        ManifestError,
+        ChecksumError,
+        CdcError,
+        MetadataError,
+        QualityError,
+        SuiteError,
+        FileNotFoundError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     return result

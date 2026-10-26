@@ -343,10 +343,16 @@ services:
         condition: service_healthy
 
   airflow:
-    image: apache/airflow:2.9.3-python3.11
+    image: taxiflow/airflow:2.9.3
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile
     profiles: ["orchestration"]
     hostname: airflow
-    command: standalone
+    command:
+      - bash
+      - -c
+      - "rm -f /opt/airflow/airflow-webserver.pid && exec airflow standalone"
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
@@ -358,15 +364,45 @@ services:
       _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER}
       _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
       PYTHONDONTWRITEBYTECODE: "1"
+      TAXIFLOW_PROJECT_ROOT: /opt/taxiflow
+      TAXIFLOW_VENV: /opt/venv
+      TAXIFLOW_RUNS_DIR: /tmp/taxiflow-runs
+      TAXIFLOW_BATCH_SERVICE: yellow
+      TAXIFLOW_BATCH_YEAR: "2024"
+      TAXIFLOW_BATCH_MONTH: "1"
+      TAXIFLOW_QUALITY_MAX_FRESHNESS_SECONDS: "86400"
+      TAXIFLOW_QUALITY_SAMPLE_LIMIT: "50000"
+      TRINO_HOST: trino
+      TRINO_PORT: "8080"
+      TRINO_USER: taxiflow
+      TRINO_CATALOG: delta
+      TRINO_BRONZE_SCHEMA: default
+      DBT_SCHEMA: analytics
+      DBT_SILVER_SCHEMA: silver
+      DBT_GOLD_SCHEMA: gold
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET}
+      S3A_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
       - "8080:8080"
     volumes:
       - ./airflow/dags:/opt/airflow/dags:ro
+      - ./:/opt/taxiflow:ro
       - airflow-logs:/opt/airflow/logs
     networks: [taxiflow]
     restart: unless-stopped
     depends_on:
       postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      trino:
         condition: service_healthy
       airflow-init:
         condition: service_completed_successfully

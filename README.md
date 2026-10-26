@@ -2,7 +2,7 @@
 
 An NYC TLC batch + CDC lakehouse.
 
-**Status:** Phases 0–4 complete locally. Phase 5 (orchestration and quality) is next.
+**Status:** Phases 0–5 complete locally. Phase 6 (serving) is next.
 
 The target architecture, phases, and exit gates are in `../PLAN.md`.
 Current status and decisions are in `../PROGRESS.md`.
@@ -19,6 +19,10 @@ A learning-oriented explanation is in `../understanding/`.
   reconciliation checks over 2,964,606 trips.
 - An Avro CDC path from Postgres through Debezium, Kafka, and Spark Structured Streaming
   into partitioned Delta bronze, with delete tombstones and checkpoint recovery.
+- An Airflow DAG that runs batch, dbt, quality, and promotion in order, with
+  `ops.pipeline_runs` and `ops.pipeline_alerts` in Postgres.
+- GX bronze/silver suites plus full-table reconciliation across bronze, silver, and
+  gold, exposed as `make quality`.
 - Trino readback of bronze and gold tables through the Delta connector.
 
 ```text
@@ -63,30 +67,46 @@ loads the taxi-zone seed, builds silver/gold models, and runs the dbt tests.
 `make batch-report` reads batch bronze back; `make cdc-report` reads CDC bronze back and
 enforces the 60-second freshness gate.
 
+Orchestration uses the `orchestration` profile:
+
+```bash
+make up-all
+docker compose --profile core --profile orchestration exec -T airflow \
+  airflow dags test taxiflow_pipeline 2026-10-27
+make quality
+```
+
+The DAG runs `batch → dbt_build → quality → promote`. A failed quality check blocks
+`promote` and writes a row to `ops.pipeline_alerts`; every DAG run writes counts to
+`ops.pipeline_runs`.
+
 ## Verify
 
 ```bash
 uv run ruff check .
 make verify
+make quality
 make cdc-replay
 uv run pytest -q -m integration
 uv run dbt build --project-dir dbt --profiles-dir dbt
 ```
 
 `make verify` runs lint, unit tests, contract tests, and Compose validation.
-`make cdc-replay` replays a deterministic CDC batch and proves no duplicate keys, the
-newer update wins, and deletes become tombstones. The integration suite needs the local
-stack and Spark. The dbt build needs Trino plus the registered Delta bronze tables;
-`make dbt-build` registers them first.
+`make quality` runs the GX suites and bronze/silver/gold reconciliation; it exits
+non-zero when a check fails. `make cdc-replay` replays a deterministic CDC batch and
+proves no duplicate keys, the newer update wins, and deletes become tombstones. The
+integration suite needs the local stack and Spark. The dbt build needs Trino plus the
+registered Delta bronze tables; `make dbt-build` registers them first.
 
 ## Layout
 
 ```text
-src/taxiflow/       Python package, CLI, TLC contracts, Spark jobs
+src/taxiflow/       Python package, CLI, quality runner, Spark jobs
 tests/              unit, contract, integration, and tiny Parquet fixtures
 dbt/                dbt project: seeds, staging, intermediate, marts, tests
-airflow/            Airflow DAGs (Phase 5)
+airflow/            DAG and batch/dbt/quality wrappers
 config/             TLC manifest, Avro contract, Debezium, Postgres, and service config
+docker/airflow/     self-contained Airflow image (Spark, dbt, GX, Java)
 docker/debezium/    Debezium image with the Confluent Avro converter
 compose.yaml        one local Compose project
 ```
