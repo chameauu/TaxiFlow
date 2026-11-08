@@ -13,7 +13,7 @@ import yaml
 pytestmark = pytest.mark.contract
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-COMPOSE_PATH = PROJECT_ROOT / "compose.yaml"
+COMPOSE_PATH = PROJECT_ROOT / "docker-compose.yaml"
 MAKEFILE_PATH = PROJECT_ROOT / "Makefile"
 CONNECTOR_PATH = PROJECT_ROOT / "config" / "debezium" / "taxi-iot-connector.json"
 AVRO_PATH = PROJECT_ROOT / "config" / "avro" / "taxi_trip_event.avsc"

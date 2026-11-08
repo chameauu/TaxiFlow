@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-COMPOSE := docker compose -f compose.yaml
+COMPOSE := docker compose -f docker-compose.yaml
 SPARK_PACKAGES := io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262
 CDC_SPARK_PACKAGES := $(SPARK_PACKAGES),org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1,org.apache.spark:spark-avro_2.12:3.5.1
 CDC_STREAM_JOB := /opt/taxiflow/src/taxiflow/jobs/stream_cdc_bronze.py
@@ -45,7 +45,7 @@ help:
 		'make test-integration Run tests against the running stack' \
 		'make lint          Run ruff' \
 		'make format        Format with ruff' \
-		'make compose-check Validate compose.yaml' \
+		'make compose-check Validate docker-compose.yaml' \
 		'make verify        Run lint, unit tests, contract tests, and Compose validation'
 
 env:

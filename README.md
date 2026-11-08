@@ -108,7 +108,7 @@ airflow/            DAG and batch/dbt/quality wrappers
 config/             TLC manifest, Avro contract, Debezium, Postgres, and service config
 docker/airflow/     self-contained Airflow image (Spark, dbt, GX, Java)
 docker/debezium/    Debezium image with the Confluent Avro converter
-compose.yaml        one local Compose project
+docker-compose.yaml        one local Compose project
 ```
 
 ## Data and secrets

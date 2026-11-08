@@ -14,7 +14,7 @@ import yaml
 pytestmark = pytest.mark.contract
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-COMPOSE_PATH = PROJECT_ROOT / "compose.yaml"
+COMPOSE_PATH = PROJECT_ROOT / "docker-compose.yaml"
 MAKEFILE_PATH = PROJECT_ROOT / "Makefile"
 CI_WORKFLOW_PATH = PROJECT_ROOT / ".github" / "workflows" / "ci.yml"
 README_PATH = PROJECT_ROOT / "README.md"

@@ -1,6 +1,6 @@
 """Static contract for the Phase 1 local platform.
 
-These tests read compose.yaml, the Trino catalog, and .env.example. They do not
+These tests read docker-compose.yaml, the Trino catalog, and .env.example. They do not
 start containers; the integration suite proves the running stack.
 """
 
@@ -16,7 +16,7 @@ import yaml
 pytestmark = pytest.mark.contract
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-COMPOSE_PATH = PROJECT_ROOT / "compose.yaml"
+COMPOSE_PATH = PROJECT_ROOT / "docker-compose.yaml"
 ENV_EXAMPLE_PATH = PROJECT_ROOT / ".env.example"
 TRINO_DELTA_PATH = PROJECT_ROOT / "config" / "trino" / "etc" / "catalog" / "delta.properties"
 MAKEFILE_PATH = PROJECT_ROOT / "Makefile"
@@ -89,9 +89,9 @@ IMAGE_PIN_RE = re.compile(r"(?::[A-Za-z0-9][A-Za-z0-9._-]*|@sha256:[0-9a-f]{64})
 
 
 def load_compose() -> dict[str, Any]:
-    """Load compose.yaml as a mapping."""
+    """Load docker-compose.yaml as a mapping."""
     data = yaml.safe_load(COMPOSE_PATH.read_text())
-    assert isinstance(data, dict), "compose.yaml must be a mapping"
+    assert isinstance(data, dict), "docker-compose.yaml must be a mapping"
     return data
 
 
