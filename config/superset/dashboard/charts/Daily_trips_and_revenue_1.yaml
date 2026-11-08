@@ -1,0 +1,22 @@
+slice_name: Daily trips and revenue
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 1__table
+  viz_type: table
+  query_mode: raw
+  all_columns:
+  - pickup_date
+  - service
+  - trip_count
+  - total_revenue
+  order_by_cols:
+  - '["pickup_date", false]'
+  row_limit: 1000
+query_context: null
+cache_timeout: null
+uuid: ccc537a3-3623-458f-965b-b9b14d77861a
+version: 1.0.0
+dataset_uuid: 8878ddd9-e82e-4032-bc33-8b003c72041a

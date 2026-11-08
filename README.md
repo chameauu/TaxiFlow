@@ -2,7 +2,7 @@
 
 An NYC TLC batch + CDC lakehouse.
 
-**Status:** Phases 0–5 complete locally. Phase 6 (serving) is next.
+**Status:** Phases 0–6 complete locally. Phase 7 (hardening and release) is next.
 
 The target architecture, phases, and exit gates are in `../PLAN.md`.
 Current status and decisions are in `../PROGRESS.md`.
@@ -23,6 +23,8 @@ A learning-oriented explanation is in `../understanding/`.
   `ops.pipeline_runs` and `ops.pipeline_alerts` in Postgres.
 - GX bronze/silver suites plus full-table reconciliation across bronze, silver, and
   gold, exposed as `make quality`.
+- A Superset dashboard over Trino gold tables, imported from a committed YAML bundle,
+  with `make superset-bootstrap` and `make serving-verify`.
 - Trino readback of bronze and gold tables through the Delta connector.
 
 ```text
@@ -80,18 +82,34 @@ The DAG runs `batch → dbt_build → quality → promote`. A failed quality che
 `promote` and writes a row to `ops.pipeline_alerts`; every DAG run writes counts to
 `ops.pipeline_runs`.
 
+Serving uses Superset on Trino:
+
+```bash
+make up-all
+make superset-bootstrap
+make serving-verify
+```
+
+Open <http://localhost:8088> and sign in with `SUPERSET_ADMIN_USER` /
+`SUPERSET_ADMIN_PASSWORD` from `.env`. The dashboard reads `gold.*`; it is a batch-serving
+surface, not real-time. `make superset-bootstrap` is idempotent for the dashboard import.
+The committed assets are under `config/superset/`; see `config/superset/README.md`.
+
 ## Verify
 
 ```bash
 uv run ruff check .
 make verify
 make quality
+make serving-verify
 make cdc-replay
 uv run pytest -q -m integration
 uv run dbt build --project-dir dbt --profiles-dir dbt
 ```
 
 `make verify` runs lint, unit tests, contract tests, and Compose validation.
+`make serving-verify` checks the Superset Trino connection, datasets, dashboard, and the
+committed SQL definitions against the running stack.
 `make quality` runs the GX suites and bronze/silver/gold reconciliation; it exits
 non-zero when a check fails. `make cdc-replay` replays a deterministic CDC batch and
 proves no duplicate keys, the newer update wins, and deletes become tombstones. The

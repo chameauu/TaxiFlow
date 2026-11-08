@@ -1,0 +1,24 @@
+slice_name: Data quality and freshness
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 5__table
+  viz_type: table
+  query_mode: raw
+  all_columns:
+  - bronze_trip_rows
+  - fact_trip_rows
+  - quarantine_rows
+  - quarantine_reason_count
+  - max_bronze_ingested_at
+  - freshness_seconds
+  order_by_cols:
+  - '["freshness_seconds", false]'
+  row_limit: 1000
+query_context: null
+cache_timeout: null
+uuid: 711997d8-b502-4497-9bde-68dce63fc212
+version: 1.0.0
+dataset_uuid: c1c58902-7ff6-422e-bf12-5aedeccd089f

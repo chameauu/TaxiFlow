@@ -1,0 +1,16 @@
+database_name: TaxiFlow Trino
+sqlalchemy_uri: trino://taxiflow@trino:8080/delta
+cache_timeout: null
+expose_in_sqllab: true
+allow_run_async: false
+allow_ctas: false
+allow_cvas: false
+allow_dml: false
+allow_file_upload: false
+extra:
+  metadata_params: {}
+  engine_params: {}
+  metadata_cache_timeout: {}
+  schemas_allowed_for_file_upload: []
+uuid: b4fb035e-89ca-4e78-9078-3e57f486e668
+version: 1.0.0

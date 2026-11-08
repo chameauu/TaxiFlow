@@ -1,0 +1,24 @@
+slice_name: Tip rate by payment type and borough
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 4__table
+  viz_type: table
+  query_mode: raw
+  all_columns:
+  - payment_type
+  - pickup_borough
+  - trip_count
+  - fare_amount
+  - tip_amount
+  - tip_rate
+  order_by_cols:
+  - '["tip_rate", false]'
+  row_limit: 1000
+query_context: null
+cache_timeout: null
+uuid: 4b7b2b92-8e1f-4723-b697-6fd44378cfc1
+version: 1.0.0
+dataset_uuid: 0a5571f1-e7b7-46ac-89fc-3bf0c1710f12

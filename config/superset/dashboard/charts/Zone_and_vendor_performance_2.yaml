@@ -1,0 +1,26 @@
+slice_name: Zone and vendor performance
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 2__table
+  viz_type: table
+  query_mode: raw
+  all_columns:
+  - pickup_date
+  - pickup_zone
+  - pickup_borough
+  - vendor_id
+  - service
+  - trip_count
+  - total_revenue
+  - tip_revenue
+  order_by_cols:
+  - '["total_revenue", false]'
+  row_limit: 1000
+query_context: null
+cache_timeout: null
+uuid: a2a2e1cd-78cf-42cd-a146-3fd136bbc844
+version: 1.0.0
+dataset_uuid: f2e58484-3749-435d-91b3-f6eea4626932

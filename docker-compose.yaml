@@ -420,14 +420,22 @@ services:
     profiles: ["bi"]
     command:
       - /bin/sh
-      - -c
-      - "superset db upgrade && superset init"
+      - /opt/taxiflow/config/superset/import_dashboard.sh
     environment:
       SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
       SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
       SUPERSET_DATABASE_URI: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${SUPERSET_DB}
+      SUPERSET_ADMIN_USER: ${SUPERSET_ADMIN_USER}
+      SUPERSET_ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+      SUPERSET_TRINO_URI: ${SUPERSET_TRINO_URI}
+      TRINO_HOST: trino
+      TRINO_PORT: "8080"
+      TRINO_USER: ${TRINO_USER:-taxiflow}
+      TRINO_CATALOG: ${TRINO_CATALOG:-delta}
     volumes:
       - ./config/superset_config.py:/app/pythonpath/superset_config.py:ro
+      - ./config/superset:/opt/taxiflow/config/superset:ro
     networks: [taxiflow]
     restart: "no"
     depends_on:

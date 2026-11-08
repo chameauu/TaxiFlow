@@ -1,0 +1,24 @@
+slice_name: Demand by hour and weekday
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 3__table
+  viz_type: table
+  query_mode: raw
+  all_columns:
+  - pickup_day_of_week
+  - pickup_hour
+  - pickup_borough
+  - service
+  - trip_count
+  - total_revenue
+  order_by_cols:
+  - '["pickup_day_of_week", true]'
+  row_limit: 1000
+query_context: null
+cache_timeout: null
+uuid: c2b53d94-fe55-40b4-8f49-25e823220006
+version: 1.0.0
+dataset_uuid: a601337d-72fc-400d-88af-0ce89b344037

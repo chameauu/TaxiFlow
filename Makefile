@@ -11,7 +11,7 @@ ALL_PROFILES := $(RUNTIME_PROFILES) --profile batch
 PROFILES := $(ALL_PROFILES)
 S3_BUCKET ?= taxiflow
 
-.PHONY: help env up up-all down reset logs ps images pull sync lock seed batch batch-report cdc-init cdc-seed cdc-register cdc-start cdc-stop cdc-report cdc-replay dbt-debug dbt-build quality register-sources test test-contract test-integration lint format compose-check verify
+.PHONY: help env up up-all down reset logs ps images pull sync lock seed batch batch-report cdc-init cdc-seed cdc-register cdc-start cdc-stop cdc-report cdc-replay dbt-debug dbt-build quality superset-bootstrap serving-verify register-sources test test-contract test-integration lint format compose-check verify
 
 help:
 	@printf '%s\n' \
@@ -39,6 +39,8 @@ help:
 		'make dbt-debug     Check the dbt Trino connection' \
 		'make dbt-build     Build dbt seeds, models, and tests' \
 		'make quality       Run GX suites and bronze/silver/gold reconciliation' \
+		'make superset-bootstrap  Create the Superset admin and import the dashboard' \
+		'make serving-verify  Verify Superset, datasets, and the gold query path' \
 		'make lock          Regenerate uv.lock' \
 		'make test          Run unit tests' \
 		'make test-contract Run Compose and config contract tests' \
@@ -179,6 +181,14 @@ quality: env
 	TRINO_PORT=$${TRINO_PORT:-8084} \
 	uv run taxiflow quality run \
 		--max-freshness-seconds $${TAXIFLOW_QUALITY_MAX_FRESHNESS_SECONDS:-86400}
+
+superset-bootstrap: env
+	$(COMPOSE) --profile core --profile bi up -d --wait --wait-timeout 420 postgres
+	$(COMPOSE) --profile core --profile bi run --rm --no-deps superset-init
+
+serving-verify: env
+	set -a; . ./.env; set +a; \
+	TAXIFLOW_REQUIRE_STACK=1 uv run pytest -q -m integration tests/integration/test_phase6_serving_stack.py
 
 test:
 	uv run pytest -q -m "not integration and not contract"
