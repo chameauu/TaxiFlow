@@ -282,6 +282,6 @@ models:
       - name: cdc_trip_rows
         data_tests:
           - not_null
-      - name: freshness_seconds
+      - name: batch_data_age_seconds
         data_tests:
           - not_null

@@ -35,6 +35,7 @@ dashboard. They must not use `SELECT *`, and must not sum per-trip measures such
 
 - Batch TLC data: refreshed by the daily Airflow DAG, or manually with `make batch`
   followed by `make dbt-build`.
-- Quality/freshness panel: refreshed by `make quality`; `freshness_seconds` is the
-  age of the newest batch ingestion, not a streaming latency.
-- CDC events are not currently part of the dashboard or dbt model.
+- Quality/freshness panel: refreshed by `make quality`; `batch_data_age_seconds` is the
+  age of the newest batch ingestion, while `cdc_lag_seconds` is the event-time age of
+  the newest CDC trip in gold.
+- CDC trips are part of the dashboard through `fct_trips.record_source`.

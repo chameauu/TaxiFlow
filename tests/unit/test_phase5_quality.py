@@ -77,7 +77,8 @@ def snapshot(**overrides: object) -> Snapshot:
         "fact_cdc_window_total_amount": 50.0,
         "quarantine_rows": 2,
         "quarantine_reason_rows": 2,
-        "freshness_seconds": 12,
+        "batch_data_age_seconds": 12,
+        "cdc_lag_seconds": 8,
     }
     values.update(overrides)
     return Snapshot(**values)
@@ -121,7 +122,8 @@ def test_reconciliation_accepts_a_consistent_snapshot() -> None:
         "trip_ids",
         "total_amount",
         "quarantine_rows",
-        "freshness",
+        "batch_data_age",
+        "cdc_lag",
     }
 
 
@@ -139,7 +141,8 @@ def test_reconciliation_accepts_a_consistent_snapshot() -> None:
         ({"fact_cdc_window_total_amount": 49.0}, "total_amount"),
         ({"cdc_total_amount": 49.0}, "total_amount"),
         ({"quarantine_reason_rows": 1}, "quarantine_rows"),
-        ({"freshness_seconds": 61}, "freshness"),
+        ({"batch_data_age_seconds": 61}, "batch_data_age"),
+        ({"cdc_lag_seconds": 61}, "cdc_lag"),
         ({"bronze_rows": 0}, "bronze_rows"),
     ],
 )
@@ -152,16 +155,29 @@ def test_reconciliation_rejects_a_broken_snapshot(
     assert failed_name in failed
 
 
+def test_cdc_lag_is_skipped_when_no_cdc_rows_exist() -> None:
+    checks = evaluate_snapshot(
+        snapshot(cdc_lag_seconds=None, cdc_rows=0, cdc_trip_ids=0,
+                 cdc_bronze_live_rows=0, fact_cdc_window_rows=0,
+                 cdc_total_amount=0.0, fact_cdc_window_total_amount=0.0),
+        max_freshness_seconds=60,
+        max_cdc_lag_seconds=60,
+    )
+
+    cdc_lag = next(check for check in checks if check.name == "cdc_lag")
+    assert cdc_lag.passed is True
+
+
 def test_quality_error_lists_every_failed_check() -> None:
     with pytest.raises(QualityError) as exc:
         evaluate_snapshot(
-            snapshot(fact_batch_rows=9, freshness_seconds=61),
+            snapshot(fact_batch_rows=9, batch_data_age_seconds=61),
             max_freshness_seconds=60,
             raise_on_failure=True,
         )
 
     assert "fact_batch_rows" in str(exc.value)
-    assert "freshness" in str(exc.value)
+    assert "batch_data_age" in str(exc.value)
 
 
 def test_run_metadata_creates_the_ops_schema_and_tables() -> None:

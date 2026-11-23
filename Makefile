@@ -183,7 +183,8 @@ quality: env
 	TRINO_HOST=$${TRINO_HOST:-localhost} \
 	TRINO_PORT=$${TRINO_PORT:-8084} \
 	uv run taxiflow quality run \
-		--max-freshness-seconds $${TAXIFLOW_QUALITY_MAX_FRESHNESS_SECONDS:-86400}
+		--max-freshness-seconds $${TAXIFLOW_QUALITY_MAX_FRESHNESS_SECONDS:-86400} \
+		--cdc-max-lag-seconds $${TAXIFLOW_CDC_MAX_LAG_SECONDS:-60}
 
 superset-bootstrap: env
 	$(COMPOSE) --profile core --profile bi up -d --wait --wait-timeout 420 postgres

@@ -4,5 +4,6 @@ select
     quarantine_rows,
     quarantine_reason_count,
     max_bronze_ingested_at,
-    freshness_seconds
+    batch_data_age_seconds,
+    cdc_lag_seconds
 from gold.quality_summary

@@ -98,7 +98,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: freshness_seconds
+- column_name: batch_data_age_seconds
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -112,3 +112,15 @@ columns:
   extra: null
 version: 1.0.0
 database_uuid: b4fb035e-89ca-4e78-9078-3e57f486e668
+- column_name: cdc_lag_seconds
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null

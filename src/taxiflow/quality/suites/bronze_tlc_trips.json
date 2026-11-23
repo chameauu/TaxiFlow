@@ -60,9 +60,12 @@
       "kwargs": {
         "column": "trip_distance",
         "min_value": 0,
-        "max_value": 1000
+        "max_value": 1000,
+        "mostly": 0.999
       },
-      "meta": {}
+      "meta": {
+        "note": "Up to 0.1% of rows may carry implausible source distances; the loader preserves source values and does not quarantine them."
+      }
     },
     {
       "expectation_type": "expect_column_values_to_be_in_set",

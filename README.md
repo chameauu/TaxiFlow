@@ -245,8 +245,8 @@ Assets are versioned, not generated at runtime:
 - `config/superset/import_dashboard.sh` — `superset db upgrade`, `superset init`,
   idempotent admin creation, deterministic ZIP build, `superset import-dashboards`.
 
-The dashboard is a **batch** surface. `freshness_seconds` is the age of the newest batch
-ingestion, not streaming latency. To refresh: `make batch` → `make dbt-build` →
+The dashboard reads both sources. `batch_data_age_seconds` is the age of the newest batch
+ingestion; `cdc_lag_seconds` is the event-time age of the newest CDC trip in gold. To refresh: `make batch` → `make dbt-build` →
 `make quality` → `make superset-bootstrap`. Re-running the bootstrap updates the dashboard
 in place instead of creating duplicates.
 

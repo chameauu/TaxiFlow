@@ -13,9 +13,10 @@ params:
   - quarantine_rows
   - quarantine_reason_count
   - max_bronze_ingested_at
-  - freshness_seconds
+  - batch_data_age_seconds
+  - cdc_lag_seconds
   order_by_cols:
-  - '["freshness_seconds", false]'
+  - '["batch_data_age_seconds", false]'
   row_limit: 1000
 query_context: null
 cache_timeout: null

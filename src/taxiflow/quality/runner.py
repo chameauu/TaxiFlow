@@ -40,6 +40,7 @@ class QualityConfig:
     silver_schema: str = "silver"
     gold_schema: str = "gold"
     max_freshness_seconds: int = 86_400
+    max_cdc_lag_seconds: int = 60
     sample_limit: int = 50_000
 
     @classmethod
@@ -55,6 +56,7 @@ class QualityConfig:
             max_freshness_seconds=int(
                 os.environ.get("TAXIFLOW_QUALITY_MAX_FRESHNESS_SECONDS", "86400")
             ),
+            max_cdc_lag_seconds=int(os.environ.get("TAXIFLOW_CDC_MAX_LAG_SECONDS", "60")),
             sample_limit=int(os.environ.get("TAXIFLOW_QUALITY_SAMPLE_LIMIT", "50000")),
         )
 
@@ -154,7 +156,18 @@ SELECT
     (SELECT coalesce(sum(CAST(quarantined_rows AS bigint)), 0)
        FROM {quality_reasons}) AS quarantine_reason_rows,
     (SELECT date_diff('second', max(ingested_at), current_timestamp)
-       FROM {silver_trips}) AS freshness_seconds
+       FROM {silver_trips}) AS batch_data_age_seconds,
+    -- Streaming freshness is source-commit -> bronze. Measuring it from gold
+    -- would include the dbt cutoff buffer and build time by construction.
+    (SELECT CASE
+                WHEN max(__source_ts_ms) IS NULL THEN NULL
+                ELSE date_diff(
+                    'second',
+                    from_unixtime(CAST(max(__source_ts_ms) AS double) / 1000.0),
+                    current_timestamp
+                )
+            END
+       FROM {cdc_bronze}) AS cdc_lag_seconds
 """
 
 BRONZE_SAMPLE_COLUMNS = (
@@ -240,9 +253,14 @@ def query_snapshot(connection: Any, config: QualityConfig) -> Snapshot:
         ),
         quarantine_rows=int(values["quarantine_rows"] or 0),
         quarantine_reason_rows=int(values["quarantine_reason_rows"] or 0),
-        freshness_seconds=(
-            int(values["freshness_seconds"])
-            if values["freshness_seconds"] is not None
+        batch_data_age_seconds=(
+            int(values["batch_data_age_seconds"])
+            if values["batch_data_age_seconds"] is not None
+            else None
+        ),
+        cdc_lag_seconds=(
+            int(values["cdc_lag_seconds"])
+            if values["cdc_lag_seconds"] is not None
             else None
         ),
     )
@@ -324,6 +342,7 @@ def run_quality(
         checks = evaluate_snapshot(
             snapshot,
             max_freshness_seconds=effective.max_freshness_seconds,
+            max_cdc_lag_seconds=effective.max_cdc_lag_seconds,
         ) + suite_checks(suites)
         report = QualityReport(
             run_id=run_id,

@@ -211,6 +211,11 @@ def _add_quality_commands(
         help="override TAXIFLOW_QUALITY_MAX_FRESHNESS_SECONDS",
     )
     run.add_argument(
+        "--cdc-max-lag-seconds",
+        type=int,
+        help="override TAXIFLOW_CDC_MAX_LAG_SECONDS",
+    )
+    run.add_argument(
         "--sample-limit",
         type=int,
         help="override TAXIFLOW_QUALITY_SAMPLE_LIMIT",
@@ -254,6 +259,8 @@ def _quality_run(args: argparse.Namespace) -> int:
     config = QualityConfig.from_env()
     if args.max_freshness_seconds is not None:
         config = replace(config, max_freshness_seconds=args.max_freshness_seconds)
+    if args.cdc_max_lag_seconds is not None:
+        config = replace(config, max_cdc_lag_seconds=args.cdc_max_lag_seconds)
     if args.sample_limit is not None:
         config = replace(config, sample_limit=args.sample_limit)
     report = run_quality(config, record=not args.no_record)

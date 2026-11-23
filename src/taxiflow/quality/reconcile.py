@@ -41,7 +41,8 @@ class Snapshot:
     fact_cdc_window_total_amount: float
     quarantine_rows: int
     quarantine_reason_rows: int
-    freshness_seconds: int | None
+    batch_data_age_seconds: int | None
+    cdc_lag_seconds: int | None
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,7 @@ def evaluate_snapshot(
     snapshot: Snapshot,
     *,
     max_freshness_seconds: int = 86_400,
+    max_cdc_lag_seconds: int = 60,
     raise_on_failure: bool = False,
 ) -> tuple[QualityCheck, ...]:
     """Evaluate every cross-layer invariant and optionally raise a summary."""
@@ -167,14 +169,24 @@ def evaluate_snapshot(
             "quarantine counts must equal the sum of reason groups",
         ),
         _check(
-            "freshness",
+            "batch_data_age",
             (
-                snapshot.freshness_seconds is not None
-                and 0 <= snapshot.freshness_seconds <= max_freshness_seconds
+                snapshot.batch_data_age_seconds is not None
+                and 0 <= snapshot.batch_data_age_seconds <= max_freshness_seconds
             ),
             f"<= {max_freshness_seconds}s",
-            snapshot.freshness_seconds,
-            "silver ingest time must be recent enough for the batch gate",
+            snapshot.batch_data_age_seconds,
+            "newest batch ingest time must be recent enough for the batch gate",
+        ),
+        _check(
+            "cdc_lag",
+            (
+                snapshot.cdc_lag_seconds is None
+                or 0 <= snapshot.cdc_lag_seconds <= max_cdc_lag_seconds
+            ),
+            f"<= {max_cdc_lag_seconds}s (skipped when no CDC rows exist)",
+            snapshot.cdc_lag_seconds,
+            "CDC event time must stay inside the streaming freshness budget",
         ),
     )
     if raise_on_failure:
