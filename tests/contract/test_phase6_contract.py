@@ -206,3 +206,21 @@ def test_dashboard_position_references_chart_uuids() -> None:
         slice_name = meta.get("sliceName")
         assert slice_name in charts, f"{block['id']} names unknown chart {slice_name}"
         assert meta.get("uuid") == charts[slice_name]["uuid"], slice_name
+
+
+def test_superset_init_waits_for_trino_before_importing() -> None:
+    # Importing the database validates the connection (SHOW CATALOGS). If the
+    # bootstrap runs before Trino is healthy the import fails the whole gate.
+    init = load_compose()["services"]["superset-init"]
+    depends = init.get("depends_on", {})
+
+    assert depends.get("postgres", {}).get("condition") == "service_healthy"
+    assert depends.get("trino", {}).get("condition") == "service_healthy"
+
+
+def test_superset_import_retries_transient_failures() -> None:
+    script = (SUPERSET_ROOT / "import_dashboard.sh").read_text(encoding="utf-8")
+
+    assert "while [" in script
+    assert "$attempt" in script
+    assert "sleep 10" in script

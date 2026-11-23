@@ -450,6 +450,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # The bundle now imports the Trino database, and Superset validates that
+      # connection (SHOW CATALOGS) during import. Starting before Trino is ready
+      # fails the bootstrap, so block on its healthcheck.
+      trino:
+        condition: service_healthy
 
   superset:
     image: taxiflow/superset:4.1.1
