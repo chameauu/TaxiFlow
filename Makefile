@@ -11,7 +11,7 @@ ALL_PROFILES := $(RUNTIME_PROFILES) --profile batch
 PROFILES := $(ALL_PROFILES)
 S3_BUCKET ?= taxiflow
 
-.PHONY: help env up up-all down reset logs ps images pull sync lock seed batch batch-report cdc-init cdc-seed cdc-register cdc-start cdc-stop cdc-report cdc-replay dbt-debug dbt-build quality superset-bootstrap serving-verify register-sources test test-contract test-integration lint format compose-check verify
+.PHONY: help env up up-all down reset logs ps images pull sync lock seed batch batch-report cdc-init cdc-seed cdc-register cdc-start cdc-stop cdc-report cdc-replay dbt-debug dbt-build quality superset-bootstrap serving-verify gate register-sources test test-contract test-integration lint format compose-check verify
 
 help:
 	@printf '%s\n' \
@@ -41,6 +41,7 @@ help:
 		'make quality       Run GX suites and bronze/silver/gold reconciliation' \
 		'make superset-bootstrap  Create the Superset admin and import the dashboard' \
 		'make serving-verify  Verify Superset, datasets, and the gold query path' \
+		'make gate           Run the full data path: platform, data, dbt, quality, dashboard' \
 		'make lock          Regenerate uv.lock' \
 		'make test          Run unit tests' \
 		'make test-contract Run Compose and config contract tests' \
@@ -115,6 +116,7 @@ lock:
 	uv lock
 
 seed: env
+	uv run taxiflow tlc status --manifest config/tlc_manifest.json
 	uv run taxiflow tlc download --manifest config/tlc_manifest.json
 	$(MAKE) cdc-init
 	$(MAKE) cdc-register
@@ -157,11 +159,12 @@ register-sources: env
 	@for schema in silver gold reference; do \
 		$(TRINO_CLI) --execute "CREATE SCHEMA IF NOT EXISTS delta.$$schema" >/dev/null; \
 	done
-	@for table in tlc_trips tlc_quarantine; do \
+	@for table in tlc_trips tlc_quarantine cdc_taxi_trips; do \
 		count=$$($(TRINO_CLI) --execute "SELECT count(*) FROM delta.information_schema.tables WHERE table_schema = 'default' AND table_name = '$$table'" 2>/dev/null | tail -n 1); \
 		if [ "$$count" = "0" ]; then \
 			echo "registering delta.default.$$table"; \
-			$(TRINO_CLI) --execute "CALL delta.system.register_table(schema_name => 'default', table_name => '$$table', table_location => 's3://$(S3_BUCKET)/bronze/$$table')"; \
+			$(TRINO_CLI) --execute "CALL delta.system.register_table(schema_name => 'default', table_name => '$$table', table_location => 's3://$(S3_BUCKET)/bronze/$$table')" \
+				|| echo "warning: delta.default.$$table not registered; its Delta location has no transaction log yet (run 'make seed' or 'make batch' first)"; \
 		else \
 			echo "delta.default.$$table already registered"; \
 		fi; \
@@ -189,6 +192,29 @@ superset-bootstrap: env
 serving-verify: env
 	set -a; . ./.env; set +a; \
 	TAXIFLOW_REQUIRE_STACK=1 uv run pytest -q -m integration tests/integration/test_phase6_serving_stack.py
+
+# One end-to-end run: platform up, data seeded, bronze loaded and reported,
+# dbt built, quality gated, dashboard served. Any step failing fails the gate.
+gate: env
+	@echo "== TaxiFlow gate: end-to-end run starting =="
+	@start=$$(date +%s); \
+	$(MAKE) --no-print-directory up-all && \
+	$(MAKE) --no-print-directory seed && \
+	$(MAKE) --no-print-directory batch && \
+	$(MAKE) --no-print-directory cdc-seed && \
+	$(MAKE) --no-print-directory cdc-report && \
+	$(MAKE) --no-print-directory dbt-build && \
+	$(MAKE) --no-print-directory quality && \
+	$(MAKE) --no-print-directory superset-bootstrap && \
+	$(MAKE) --no-print-directory serving-verify; \
+	status=$$?; \
+	elapsed=$$(($$(date +%s) - start)); \
+	if [ $$status -eq 0 ]; then \
+		echo "gate PASSED in $${elapsed}s"; \
+	else \
+		echo "gate FAILED after $${elapsed}s (exit $$status)"; \
+	fi; \
+	exit $$status
 
 test:
 	uv run pytest -q -m "not integration and not contract"

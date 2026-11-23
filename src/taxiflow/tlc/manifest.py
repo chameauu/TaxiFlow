@@ -161,14 +161,27 @@ def verify_file(entry: TlcFile, root: Path) -> Path:
     return path
 
 
-def download_file(entry: TlcFile, root: Path, *, timeout: float = 60.0) -> Path:
-    """Download a TLC file into the local cache after verifying its checksum."""
+def download_file(
+    entry: TlcFile, root: Path, *, timeout: float = 60.0, offline: bool = False
+) -> Path:
+    """Download a TLC file into the local cache after verifying its checksum.
+
+    With ``offline=True`` the cache is the only source: a missing or corrupt
+    file raises instead of touching the network.
+    """
     destination = resolve_path(root, entry)
     if destination.is_file():
         try:
             return verify_file(entry, root)
         except ChecksumError:
-            pass
+            if offline:
+                raise
+
+    if offline:
+        raise FileNotFoundError(
+            f"offline mode: TLC file not cached: {destination}; "
+            "run 'make seed' once with network access to download it"
+        )
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(destination.suffix + ".part")

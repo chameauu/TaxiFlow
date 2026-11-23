@@ -152,3 +152,48 @@ def test_download_file_uses_atomic_local_copy(tmp_path: Path) -> None:
 
     assert resolved.read_bytes() == payload
     assert not (tmp_path / "data" / "raw" / "yellow.parquet.part").exists()
+
+
+def test_download_file_offline_fails_fast_when_file_missing(tmp_path: Path) -> None:
+    manifest = write_manifest(tmp_path, [entry()])
+
+    with pytest.raises(FileNotFoundError, match="offline"):
+        download_file(load_manifest(manifest)[0], tmp_path, offline=True)
+
+
+def test_download_file_offline_verifies_cached_file(tmp_path: Path) -> None:
+    payload = b"cached-bytes"
+    cached = tmp_path / "data" / "raw" / "yellow.parquet"
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(payload)
+    remote = tmp_path / "remote.parquet"
+    remote.write_bytes(b"different-bytes")
+    manifest = write_manifest(
+        tmp_path,
+        [
+            entry(
+                url=remote.as_uri(),
+                path="data/raw/yellow.parquet",
+                size_bytes=len(payload),
+                sha256=hashlib.sha256(payload).hexdigest(),
+            )
+        ],
+    )
+
+    resolved = download_file(load_manifest(manifest)[0], tmp_path, offline=True)
+
+    assert resolved == cached
+
+
+def test_download_file_offline_rejects_corrupt_cache(tmp_path: Path) -> None:
+    payload = b"corrupt"
+    cached = tmp_path / "data" / "raw" / "yellow.parquet"
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(payload)
+    manifest = write_manifest(
+        tmp_path,
+        [entry(size_bytes=len(payload), sha256="b" * 64)],
+    )
+
+    with pytest.raises(ChecksumError, match="sha256"):
+        download_file(load_manifest(manifest)[0], tmp_path, offline=True)

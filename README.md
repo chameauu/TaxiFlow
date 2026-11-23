@@ -3,8 +3,8 @@
 **An NYC TLC batch + CDC lakehouse.** One Compose project, one Delta lake on MinIO, dbt
 models on Trino, and a Superset dashboard.
 
-A fresh checkout reaches queryable gold tables with
-`make up && make seed && make batch && make dbt-build`.
+A fresh checkout reaches queryable gold tables and the dashboard with one command,
+`make gate`.
 
 ## Contents
 
@@ -115,9 +115,23 @@ Every image is pinned; the three `taxiflow/*` images are built locally from `doc
 
 ## Quick start
 
+One command from a fresh checkout:
+
 ```bash
 make env                 # writes .env with generated local credentials
 uv sync --frozen --group quality
+make gate                # platform, TLC + CDC data, bronze, dbt, quality, dashboard
+```
+
+The first `make gate` (or `make seed`) downloads the checksum-pinned TLC slice from the
+NYC TLC site — network is required once. Every later run reuses the cache in `data/`
+and re-verifies its size and SHA-256 before use; `uv run taxiflow tlc status` shows
+which manifest files are cached, and `uv run taxiflow tlc download --offline` fails
+fast instead of touching the network.
+
+Or step by step:
+
+```bash
 make up                  # core + stream profiles, all healthchecked
 make seed                # download/verify TLC file, apply CDC schema, register Debezium
 make batch               # 2024-01 yellow → Delta bronze + quarantine
@@ -145,7 +159,7 @@ including the dashboard — requires `make up-all` or an explicit `--profile`.
 | `make down` / `make reset` | Stop services / stop and delete named volumes |
 | `make ps` / `make logs` | Service health / aggregated logs |
 | `make images` / `make pull` | List / pull every image, including the `batch` profile |
-| `make seed` | Download and verify TLC data; initialize and register CDC |
+| `make seed` | Report TLC cache status, download and verify pinned data, initialize and register CDC |
 | `make batch` / `make batch-report` | Run one TLC month into bronze / read it back |
 | `make cdc-init` / `cdc-seed` / `cdc-register` / `cdc-start` / `cdc-stop` | CDC lifecycle |
 | `make cdc-report` / `make cdc-replay` | CDC counts and freshness / deterministic replay drill |
@@ -153,6 +167,7 @@ including the dashboard — requires `make up-all` or an explicit `--profile`.
 | `make dbt-debug` / `make dbt-build` | Check the Trino connection / build seeds, models, tests |
 | `make quality` | GX suites plus bronze→silver→gold reconciliation |
 | `make superset-bootstrap` / `make serving-verify` | Import the dashboard / verify the serving path |
+| `make gate` | End-to-end run: platform up → data → bronze → dbt → quality → dashboard, one exit code |
 | `make test` / `test-contract` / `test-integration` | Unit / contract / stack tests |
 | `make lint` / `make format` / `make compose-check` | Ruff / Ruff / Compose validation |
 | `make verify` | Lint, unit tests, contract tests, Compose validation |
@@ -246,14 +261,16 @@ in place instead of creating duplicates.
 | Quality | GX suites + `taxiflow quality` | MinIO, Postgres, Trino |
 
 ```bash
-make verify            # ruff + 55 unit + 54 contract + Compose validation
+make gate              # end-to-end data path, one exit code
+make verify            # ruff + 55 unit + 59 contract + Compose validation
 make quality           # GX suites and full-table reconciliation
 make serving-verify    # Superset ↔ Trino ↔ gold, including every committed query
 make cdc-replay        # replay a CDC batch twice; counts and keys must not change
 uv run pytest -q -m integration
 ```
 
-`make verify` is the pre-commit gate; `make quality`, `make cdc-replay`, and
+`make verify` is the static pre-commit gate; `make gate` runs the full data path from a
+clean volume and is the end-to-end proof. `make quality`, `make cdc-replay`, and
 `make serving-verify` need the running stack. Every gate is expected to pass from a clean
 volume, not only on an existing one.
 

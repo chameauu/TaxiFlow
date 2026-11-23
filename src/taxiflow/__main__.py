@@ -36,6 +36,7 @@ from taxiflow.tlc.manifest import (
     TlcFile,
     download_file,
     load_manifest,
+    resolve_path,
     select_file,
     verify_file,
 )
@@ -45,9 +46,16 @@ def _add_tlc_commands(subparsers: argparse._SubParsersAction[argparse.ArgumentPa
     tlc = subparsers.add_parser("tlc", help="download and verify TLC source files")
     tlc_subparsers = tlc.add_subparsers(dest="tlc_command", required=True)
 
+    handlers = {
+        "download": _download,
+        "verify": _verify,
+        "status": _status,
+    }
+    parsers: dict[str, argparse.ArgumentParser] = {}
     for name, help_text in (
         ("download", "download missing files and verify checksums"),
         ("verify", "verify cached files against the manifest"),
+        ("status", "print which manifest files are cached locally"),
     ):
         command = tlc_subparsers.add_parser(name, help=help_text)
         command.add_argument(
@@ -63,7 +71,14 @@ def _add_tlc_commands(subparsers: argparse._SubParsersAction[argparse.ArgumentPa
         command.add_argument("--service", choices=sorted(SERVICES))
         command.add_argument("--year", type=int)
         command.add_argument("--month", type=int)
-        command.set_defaults(handler=_download if name == "download" else _verify)
+        command.set_defaults(handler=handlers[name])
+        parsers[name] = command
+
+    parsers["download"].add_argument(
+        "--offline",
+        action="store_true",
+        help="fail fast when a manifest file is not already cached; never touch the network",
+    )
 
 
 def _selected_files(args: argparse.Namespace) -> tuple[TlcFile, ...]:
@@ -82,9 +97,24 @@ def _download(args: argparse.Namespace) -> int:
     for entry in files:
         destination = root / entry.path
         existed = destination.is_file()
-        path = download_file(entry, root)
+        path = download_file(entry, root, offline=args.offline)
         action = "verified" if existed else "downloaded"
         print(f"{action} {path} ({entry.size_bytes} bytes, sha256 {entry.sha256})")
+    return 0
+
+
+def _status(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    files = _selected_files(args)
+    cached = 0
+    for entry in files:
+        destination = resolve_path(root, entry)
+        if destination.is_file():
+            cached += 1
+            print(f"cached {destination}")
+        else:
+            print(f"missing {destination}")
+    print(f"cache: {cached}/{len(files)} manifest files present")
     return 0
 
 
