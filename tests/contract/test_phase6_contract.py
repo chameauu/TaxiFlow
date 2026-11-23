@@ -162,3 +162,47 @@ def test_serving_documentation_records_refresh_expectations() -> None:
     assert "make dbt-build" in text
     assert "not real-time" in text
     assert "refresh" in text
+
+
+def test_every_dashboard_yaml_file_parses() -> None:
+    # A stray list item at the top level only fails at import time in Superset,
+    # so the bundle is parsed here to keep that failure in CI instead.
+    paths = sorted(DASHBOARD_ROOT.rglob("*.yaml"))
+    assert paths
+
+    for path in paths:
+        data = yaml.safe_load(path.read_text())
+        assert isinstance(data, dict), path
+
+
+def test_dataset_columns_are_nested_under_the_columns_key() -> None:
+    for path in sorted((DASHBOARD_ROOT / "datasets").rglob("*.yaml")):
+        data = load_yaml(path)
+        columns = data.get("columns")
+        assert isinstance(columns, list), path
+        assert all("column_name" in column for column in columns), path
+
+
+def test_dashboard_position_references_chart_uuids() -> None:
+    # Superset discovers charts, then datasets, then databases by walking the
+    # dashboard position graph and reading meta.uuid. A chart block without a
+    # uuid imports only the dashboard row and silently skips the rest.
+    charts = {
+        chart["slice_name"]: chart
+        for chart in (
+            load_yaml(path) for path in (DASHBOARD_ROOT / "charts").glob("*.yaml")
+        )
+    }
+    dashboard = load_yaml(next((DASHBOARD_ROOT / "dashboards").glob("*.yaml")))
+    blocks = [
+        node
+        for node in dashboard["position"].values()
+        if isinstance(node, dict) and node.get("type") == "CHART"
+    ]
+
+    assert blocks
+    for block in blocks:
+        meta = block.get("meta", {})
+        slice_name = meta.get("sliceName")
+        assert slice_name in charts, f"{block['id']} names unknown chart {slice_name}"
+        assert meta.get("uuid") == charts[slice_name]["uuid"], slice_name

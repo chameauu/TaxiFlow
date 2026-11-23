@@ -47,6 +47,7 @@ position:
       width: 6
       height: 50
       sliceName: Daily trips and revenue
+      uuid: ccc537a3-3623-458f-965b-b9b14d77861a
   CHART-2:
     type: CHART
     id: CHART-2
@@ -60,6 +61,7 @@ position:
       width: 6
       height: 50
       sliceName: Zone and vendor performance
+      uuid: a2a2e1cd-78cf-42cd-a146-3fd136bbc844
   ROW-2:
     type: ROW
     id: ROW-2
@@ -84,6 +86,7 @@ position:
       width: 6
       height: 50
       sliceName: Demand by hour and weekday
+      uuid: c2b53d94-fe55-40b4-8f49-25e823220006
   CHART-4:
     type: CHART
     id: CHART-4
@@ -97,6 +100,7 @@ position:
       width: 6
       height: 50
       sliceName: Tip rate by payment type and borough
+      uuid: 4b7b2b92-8e1f-4723-b697-6fd44378cfc1
   ROW-3:
     type: ROW
     id: ROW-3
@@ -120,6 +124,7 @@ position:
       width: 12
       height: 50
       sliceName: Data quality and freshness
+      uuid: 711997d8-b502-4497-9bde-68dce63fc212
   ROW-4:
     type: ROW
     id: ROW-4
@@ -143,6 +148,7 @@ position:
       width: 12
       height: 50
       sliceName: Trips by source
+      uuid: 3e9c7d24-8b1f-4c5a-9d2e-6f0a1b2c3d47
 metadata:
   refresh_frequency: 0
 version: 1.0.0

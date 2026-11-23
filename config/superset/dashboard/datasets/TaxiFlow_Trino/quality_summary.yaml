@@ -110,8 +110,6 @@ columns:
   description: null
   python_date_format: null
   extra: null
-version: 1.0.0
-database_uuid: b4fb035e-89ca-4e78-9078-3e57f486e668
 - column_name: cdc_lag_seconds
   verbose_name: null
   is_dttm: false
@@ -124,3 +122,5 @@ database_uuid: b4fb035e-89ca-4e78-9078-3e57f486e668
   description: null
   python_date_format: null
   extra: null
+version: 1.0.0
+database_uuid: b4fb035e-89ca-4e78-9078-3e57f486e668
