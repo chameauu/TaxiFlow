@@ -71,6 +71,11 @@ services:
       - max_replication_slots=10
       - -c
       - max_wal_senders=10
+      # Naive `timestamp` columns in the iot schema are UTC wall clock (see
+      # tests/unit/test_cdc_timestamp_contract.py); pin the server so Debezium's
+      # epoch-millis conversion base is unambiguous.
+      - -c
+      - timezone=UTC
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -240,6 +245,8 @@ services:
     profiles: ["stream"]
     hostname: debezium
     environment:
+      # connect-mode timestamp conversions must not follow the worker's zone.
+      TZ: UTC
       BOOTSTRAP_SERVERS: kafka:29092
       GROUP_ID: taxiflow-connect
       CONFIG_STORAGE_TOPIC: taxiflow_connect_configs

@@ -62,15 +62,21 @@ def snapshot(**overrides: object) -> Snapshot:
     values: dict[str, object] = {
         "bronze_rows": 10,
         "silver_rows": 10,
-        "fact_rows": 10,
-        "quarantine_rows": 2,
-        "quarantine_reason_rows": 2,
         "bronze_trip_ids": 10,
         "silver_trip_ids": 10,
-        "fact_trip_ids": 10,
         "bronze_total_amount": 100.25,
         "silver_total_amount": 100.25,
-        "fact_total_amount": 100.25,
+        "fact_batch_rows": 10,
+        "fact_batch_trip_ids": 10,
+        "fact_batch_total_amount": 100.25,
+        "cdc_rows": 4,
+        "cdc_trip_ids": 4,
+        "cdc_total_amount": 50.0,
+        "cdc_bronze_live_rows": 4,
+        "fact_cdc_window_rows": 4,
+        "fact_cdc_window_total_amount": 50.0,
+        "quarantine_rows": 2,
+        "quarantine_reason_rows": 2,
         "freshness_seconds": 12,
     }
     values.update(overrides)
@@ -110,7 +116,8 @@ def test_reconciliation_accepts_a_consistent_snapshot() -> None:
     assert {check.name for check in checks} >= {
         "bronze_rows",
         "silver_rows",
-        "fact_rows",
+        "cdc_rows",
+        "fact_batch_rows",
         "trip_ids",
         "total_amount",
         "quarantine_rows",
@@ -121,10 +128,16 @@ def test_reconciliation_accepts_a_consistent_snapshot() -> None:
 @pytest.mark.parametrize(
     ("overrides", "failed_name"),
     [
-        ({"fact_rows": 9}, "fact_rows"),
+        ({"fact_batch_rows": 9}, "fact_batch_rows"),
         ({"silver_rows": 8}, "silver_rows"),
-        ({"fact_trip_ids": 9}, "trip_ids"),
-        ({"fact_total_amount": 99.0}, "total_amount"),
+        ({"cdc_rows": 3}, "cdc_rows"),
+        ({"cdc_bronze_live_rows": 5}, "cdc_rows"),
+        ({"fact_batch_trip_ids": 9}, "trip_ids"),
+        ({"cdc_trip_ids": 3}, "trip_ids"),
+        ({"fact_cdc_window_rows": 3}, "trip_ids"),
+        ({"fact_batch_total_amount": 99.0}, "total_amount"),
+        ({"fact_cdc_window_total_amount": 49.0}, "total_amount"),
+        ({"cdc_total_amount": 49.0}, "total_amount"),
         ({"quarantine_reason_rows": 1}, "quarantine_rows"),
         ({"freshness_seconds": 61}, "freshness"),
         ({"bronze_rows": 0}, "bronze_rows"),
@@ -142,12 +155,12 @@ def test_reconciliation_rejects_a_broken_snapshot(
 def test_quality_error_lists_every_failed_check() -> None:
     with pytest.raises(QualityError) as exc:
         evaluate_snapshot(
-            snapshot(fact_rows=9, freshness_seconds=61),
+            snapshot(fact_batch_rows=9, freshness_seconds=61),
             max_freshness_seconds=60,
             raise_on_failure=True,
         )
 
-    assert "fact_rows" in str(exc.value)
+    assert "fact_batch_rows" in str(exc.value)
     assert "freshness" in str(exc.value)
 
 

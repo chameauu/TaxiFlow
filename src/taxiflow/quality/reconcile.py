@@ -12,19 +12,35 @@ class QualityError(RuntimeError):
 
 @dataclass(frozen=True)
 class Snapshot:
-    """One consistent set of counts and sums across bronze, silver, and gold."""
+    """One consistent set of counts and sums across bronze, silver, and gold.
+
+    Batch and CDC are reconciled separately. Batch is static, so gold must
+    equal bronze exactly. The CDC stream keeps appending while the runner
+    reads, so every CDC metric is frozen at the gold fact's own event-time
+    window (the max cdc source_ts_ms present in fct_trips): the check is that
+    the frozen window is fully present in gold with matching amounts, which
+    catches dropped, duplicated, or mis-cast rows without racing the stream.
+    Trips whose latest event lands after the last dbt build are invisible
+    here by design; they join on the next run.
+    """
 
     bronze_rows: int
     silver_rows: int
-    fact_rows: int
-    quarantine_rows: int
-    quarantine_reason_rows: int
     bronze_trip_ids: int
     silver_trip_ids: int
-    fact_trip_ids: int
     bronze_total_amount: float
     silver_total_amount: float
-    fact_total_amount: float
+    fact_batch_rows: int
+    fact_batch_trip_ids: int
+    fact_batch_total_amount: float
+    cdc_rows: int
+    cdc_trip_ids: int
+    cdc_total_amount: float
+    cdc_bronze_live_rows: int
+    fact_cdc_window_rows: int
+    fact_cdc_window_total_amount: float
+    quarantine_rows: int
+    quarantine_reason_rows: int
     freshness_seconds: int | None
 
 
@@ -75,44 +91,73 @@ def evaluate_snapshot(
             snapshot.silver_rows == snapshot.bronze_rows,
             snapshot.bronze_rows,
             snapshot.silver_rows,
-            "silver staging must preserve every accepted bronze row",
+            "batch staging must preserve every accepted batch bronze row",
         ),
         _check(
-            "fact_rows",
-            snapshot.fact_rows == snapshot.bronze_rows,
+            "cdc_rows",
+            snapshot.cdc_rows == snapshot.cdc_bronze_live_rows,
+            snapshot.cdc_bronze_live_rows,
+            snapshot.cdc_rows,
+            "CDC staging must equal the live state derived from CDC bronze "
+            "(latest event per trip_id, deletes removed)",
+        ),
+        _check(
+            "fact_batch_rows",
+            snapshot.fact_batch_rows == snapshot.bronze_rows,
             snapshot.bronze_rows,
-            snapshot.fact_rows,
-            "gold fact must preserve every accepted bronze row",
+            snapshot.fact_batch_rows,
+            "gold fact must preserve every accepted batch trip",
         ),
         _check(
             "trip_ids",
             (
                 snapshot.bronze_trip_ids == snapshot.bronze_rows
                 and snapshot.silver_trip_ids == snapshot.bronze_rows
-                and snapshot.fact_trip_ids == snapshot.bronze_rows
+                and snapshot.fact_batch_trip_ids == snapshot.bronze_rows
+                and snapshot.cdc_trip_ids == snapshot.cdc_rows
+                and snapshot.fact_cdc_window_rows == snapshot.cdc_rows
             ),
-            snapshot.bronze_rows,
+            {
+                "bronze": snapshot.bronze_rows,
+                "silver": snapshot.bronze_rows,
+                "fact_batch": snapshot.bronze_rows,
+                "cdc_window": snapshot.cdc_rows,
+                "fact_cdc_window": snapshot.cdc_rows,
+            },
             {
                 "bronze": snapshot.bronze_trip_ids,
                 "silver": snapshot.silver_trip_ids,
-                "gold": snapshot.fact_trip_ids,
+                "fact_batch": snapshot.fact_batch_trip_ids,
+                "cdc_window": snapshot.cdc_trip_ids,
+                "fact_cdc_window": snapshot.fact_cdc_window_rows,
             },
             "every accepted trip must have one stable trip_id in every layer",
         ),
         _check(
             "total_amount",
-            _amounts_match(
-                snapshot.bronze_total_amount,
-                snapshot.silver_total_amount,
-                snapshot.fact_total_amount,
+            (
+                _amounts_match(
+                    snapshot.bronze_total_amount, snapshot.silver_total_amount
+                )
+                and _amounts_match(
+                    snapshot.fact_batch_total_amount,
+                    snapshot.bronze_total_amount,
+                )
+                and _amounts_match(
+                    snapshot.fact_cdc_window_total_amount,
+                    snapshot.cdc_total_amount,
+                )
             ),
             "equal within 0.01",
             {
                 "bronze": snapshot.bronze_total_amount,
                 "silver": snapshot.silver_total_amount,
-                "gold": snapshot.fact_total_amount,
+                "fact_batch": snapshot.fact_batch_total_amount,
+                "cdc_window": snapshot.cdc_total_amount,
+                "fact_cdc_window": snapshot.fact_cdc_window_total_amount,
             },
-            "money must reconcile exactly (within one cent) across layers",
+            "money must reconcile exactly (within one cent) across layers "
+            "and across both sources",
         ),
         _check(
             "quarantine_rows",

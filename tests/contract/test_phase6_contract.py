@@ -107,6 +107,7 @@ def test_dashboard_charts_cover_the_four_core_questions() -> None:
         "Demand by hour and weekday",
         "Tip rate by payment type and borough",
         "Data quality and freshness",
+        "Trips by source",
     } <= names
     assert all(chart["version"] == "1.0.0" for chart in charts)
     assert all(chart["dataset_uuid"] for chart in charts)
@@ -119,6 +120,7 @@ def test_dashboard_queries_cover_the_core_questions_and_are_safe() -> None:
         "demand_heatmap.sql": "gold.agg_hourly_demand",
         "tip_rate.sql": "gold.agg_tip_rate",
         "quality_summary.sql": "gold.quality_summary",
+        "trips_by_source.sql": "gold.fct_trips",
     }
 
     for name, table in expected.items():

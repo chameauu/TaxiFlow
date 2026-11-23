@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: bronze
-    description: Delta bronze written by the Spark batch job.
+    description: Delta bronze written by the Spark batch and CDC jobs.
     database: "{{ env_var('TRINO_CATALOG', 'delta') }}"
     schema: "{{ env_var('TRINO_BRONZE_SCHEMA', 'default') }}"
     tables:
@@ -22,3 +22,14 @@ sources:
             description: Deterministic identity for the rejected row and reason.
           - name: quarantine_reason
             description: Contract reason the row was rejected.
+      - name: cdc_taxi_trips
+        description: Latest-state CDC events from iot.taxi_nyc_time_series, one row per Debezium event.
+        columns:
+          - name: trip_id
+            description: Source-owned identity; stable across updates and deletes.
+          - name: __op
+            description: Debezium operation (c, r, u, d).
+          - name: __source_ts_ms
+            description: Debezium source epoch millis; the event ordering and freshness clock.
+          - name: pickup_datetime
+            description: Pickup as epoch millis; naive iot timestamps are UTC wall clock.

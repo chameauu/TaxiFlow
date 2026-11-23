@@ -1,0 +1,26 @@
+slice_name: Trips by source
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 6__table
+  viz_type: table
+  query_mode: aggregate
+  groupby:
+  - record_source
+  metrics:
+  - aggregate: COUNT
+    column: null
+    expressionType: SIMPLE
+    hasCustomLabel: false
+    isNew: false
+    label: COUNT(*)
+    optionName: metric_count_trips
+    sqlExpression: null
+  row_limit: 1000
+query_context: null
+cache_timeout: null
+uuid: 3e9c7d24-8b1f-4c5a-9d2e-6f0a1b2c3d47
+version: 1.0.0
+dataset_uuid: 8f4a2b1e-5c6d-4a9e-9b3f-2d7c1e0a4b55

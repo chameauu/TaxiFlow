@@ -99,6 +99,11 @@ class QualityReport:
 
 
 SNAPSHOT_SQL = """
+WITH window_max AS (
+    SELECT coalesce(max(source_ts_ms), 0) AS max_ts
+    FROM {gold_trips}
+    WHERE record_source = 'cdc'
+)
 SELECT
     (SELECT count(*) FROM {bronze_trips}) AS bronze_rows,
     (SELECT count(DISTINCT trip_id) FROM {bronze_trips}) AS bronze_trip_ids,
@@ -108,10 +113,43 @@ SELECT
     (SELECT count(DISTINCT trip_id) FROM {silver_trips}) AS silver_trip_ids,
     (SELECT coalesce(sum(CAST(total_amount AS double)), 0.0)
        FROM {silver_trips}) AS silver_total_amount,
-    (SELECT count(*) FROM {gold_trips}) AS fact_rows,
-    (SELECT count(DISTINCT trip_id) FROM {gold_trips}) AS fact_trip_ids,
+    (SELECT count(*) FROM {gold_trips}
+      WHERE record_source = 'batch') AS fact_batch_rows,
+    (SELECT count(DISTINCT trip_id) FROM {gold_trips}
+      WHERE record_source = 'batch') AS fact_batch_trip_ids,
     (SELECT coalesce(sum(CAST(total_amount AS double)), 0.0)
-       FROM {gold_trips}) AS fact_total_amount,
+       FROM {gold_trips} WHERE record_source = 'batch') AS fact_batch_total_amount,
+    (SELECT count(*) FROM {cdc_silver}
+      WHERE source_ts_ms <= (SELECT max_ts FROM window_max)) AS cdc_rows,
+    (SELECT count(DISTINCT trip_id) FROM {cdc_silver}
+      WHERE source_ts_ms <= (SELECT max_ts FROM window_max)) AS cdc_trip_ids,
+    (SELECT coalesce(sum(CAST(total_amount AS double)), 0.0)
+       FROM {cdc_silver}
+      WHERE source_ts_ms <= (SELECT max_ts FROM window_max)) AS cdc_total_amount,
+    (SELECT count(*) FROM (
+         SELECT trip_id,
+                __op,
+                __deleted,
+                __source_ts_ms,
+                row_number() OVER (
+                    PARTITION BY trip_id
+                    ORDER BY __source_ts_ms DESC
+                ) AS event_rank
+         FROM {cdc_bronze}
+     ) AS latest_events
+     WHERE event_rank = 1
+       AND __op != 'd'
+       AND coalesce(__deleted, 'false') != 'true'
+       AND __source_ts_ms <= (SELECT max_ts FROM window_max)) AS cdc_bronze_live_rows,
+    (SELECT count(*) FROM {gold_trips} f
+      JOIN {cdc_silver} s ON f.trip_id = s.trip_id
+      WHERE f.record_source = 'cdc'
+        AND s.source_ts_ms <= (SELECT max_ts FROM window_max)) AS fact_cdc_window_rows,
+    (SELECT coalesce(sum(CAST(f.total_amount AS double)), 0.0)
+       FROM {gold_trips} f
+       JOIN {cdc_silver} s ON f.trip_id = s.trip_id
+      WHERE f.record_source = 'cdc'
+        AND s.source_ts_ms <= (SELECT max_ts FROM window_max)) AS fact_cdc_window_total_amount,
     (SELECT count(*) FROM {quarantine}) AS quarantine_rows,
     (SELECT coalesce(sum(CAST(quarantined_rows AS bigint)), 0)
        FROM {quality_reasons}) AS quarantine_reason_rows,
@@ -147,6 +185,8 @@ def build_snapshot_sql(config: QualityConfig) -> str:
         bronze_trips=config.table(config.bronze_schema, "tlc_trips"),
         silver_trips=config.table(config.silver_schema, "stg_yellow_trips"),
         gold_trips=config.table(config.gold_schema, "fct_trips"),
+        cdc_bronze=config.table(config.bronze_schema, "cdc_taxi_trips"),
+        cdc_silver=config.table(config.silver_schema, "stg_cdc_trips"),
         quarantine=config.table(config.bronze_schema, "tlc_quarantine"),
         quality_reasons=config.table(config.gold_schema, "fct_quality_reasons"),
     )
@@ -183,15 +223,23 @@ def query_snapshot(connection: Any, config: QualityConfig) -> Snapshot:
     return Snapshot(
         bronze_rows=int(values["bronze_rows"] or 0),
         silver_rows=int(values["silver_rows"] or 0),
-        fact_rows=int(values["fact_rows"] or 0),
-        quarantine_rows=int(values["quarantine_rows"] or 0),
-        quarantine_reason_rows=int(values["quarantine_reason_rows"] or 0),
         bronze_trip_ids=int(values["bronze_trip_ids"] or 0),
         silver_trip_ids=int(values["silver_trip_ids"] or 0),
-        fact_trip_ids=int(values["fact_trip_ids"] or 0),
         bronze_total_amount=float(values["bronze_total_amount"] or 0.0),
         silver_total_amount=float(values["silver_total_amount"] or 0.0),
-        fact_total_amount=float(values["fact_total_amount"] or 0.0),
+        fact_batch_rows=int(values["fact_batch_rows"] or 0),
+        fact_batch_trip_ids=int(values["fact_batch_trip_ids"] or 0),
+        fact_batch_total_amount=float(values["fact_batch_total_amount"] or 0.0),
+        cdc_rows=int(values["cdc_rows"] or 0),
+        cdc_trip_ids=int(values["cdc_trip_ids"] or 0),
+        cdc_total_amount=float(values["cdc_total_amount"] or 0.0),
+        cdc_bronze_live_rows=int(values["cdc_bronze_live_rows"] or 0),
+        fact_cdc_window_rows=int(values["fact_cdc_window_rows"] or 0),
+        fact_cdc_window_total_amount=(
+            float(values["fact_cdc_window_total_amount"] or 0.0)
+        ),
+        quarantine_rows=int(values["quarantine_rows"] or 0),
+        quarantine_reason_rows=int(values["quarantine_reason_rows"] or 0),
         freshness_seconds=(
             int(values["freshness_seconds"])
             if values["freshness_seconds"] is not None

@@ -120,6 +120,29 @@ position:
       width: 12
       height: 50
       sliceName: Data quality and freshness
+  ROW-4:
+    type: ROW
+    id: ROW-4
+    children:
+    - CHART-6
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-6:
+    type: CHART
+    id: CHART-6
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-4
+    meta:
+      chartId: 6
+      width: 12
+      height: 50
+      sliceName: Trips by source
 metadata:
   refresh_frequency: 0
 version: 1.0.0

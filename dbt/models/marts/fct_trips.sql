@@ -1,5 +1,6 @@
 select
     trip_id,
+    record_source,
     vendor_id,
     pickup_at,
     dropoff_at,
@@ -33,5 +34,9 @@ select
     service,
     source_file,
     source_row_number,
-    ingested_at
+    ingested_at,
+    updated_at,
+    source_ts_ms,
+    event_date,
+    is_deleted
 from {{ ref('int_trips_enriched') }}

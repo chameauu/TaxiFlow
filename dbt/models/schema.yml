@@ -21,6 +21,37 @@ models:
         data_tests:
           - not_null
 
+  - name: stg_cdc_trips
+    description: Live CDC trip state; latest Debezium event per trip_id, deletes removed.
+    columns:
+      - name: trip_id
+        data_tests:
+          - not_null
+          - unique
+      - name: service
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['yellow', 'green']
+      - name: pickup_at
+        data_tests:
+          - not_null
+      - name: total_amount
+        data_tests:
+          - not_null
+      - name: is_deleted
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [false]
+                quote: false
+      - name: source_ts_ms
+        description: Debezium source epoch millis; ordering and freshness clock.
+        data_tests:
+          - not_null
+
   - name: stg_taxi_zones
     description: Versioned taxi zone lookup.
     columns:
@@ -42,6 +73,13 @@ models:
         data_tests:
           - not_null
           - unique
+      - name: record_source
+        description: Origin of the row; batch TLC files or the CDC live state.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['batch', 'cdc']
       - name: pickup_borough
         data_tests:
           - not_null
@@ -81,6 +119,13 @@ models:
         data_tests:
           - not_null
           - unique
+      - name: record_source
+        description: Origin of the row; batch TLC files or the CDC live state.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['batch', 'cdc']
       - name: pickup_at
         data_tests:
           - not_null
@@ -232,6 +277,9 @@ models:
         data_tests:
           - not_null
       - name: quarantine_rows
+        data_tests:
+          - not_null
+      - name: cdc_trip_rows
         data_tests:
           - not_null
       - name: freshness_seconds
