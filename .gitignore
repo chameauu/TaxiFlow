@@ -23,3 +23,4 @@ dbt_packages/
 
 # dbt local state
 .user.yml
+.cache/

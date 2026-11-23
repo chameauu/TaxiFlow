@@ -12,7 +12,6 @@ volumes:
   zookeeper-log:
   kafka-data:
   airflow-logs:
-  spark-ivy:
 
 services:
   minio:
@@ -313,6 +312,9 @@ services:
       - /opt/taxiflow/src/taxiflow/jobs/stream_cdc_bronze.py
     environment:
       SPARK_NO_DAEMONIZE: "true"
+      # Bound Ivy's remote reads: a dropped Maven socket otherwise blocks
+      # spark-submit forever (no default read timeout).
+      SPARK_SUBMIT_OPTS: "-Dsun.net.client.defaultConnectTimeout=30000 -Dsun.net.client.defaultReadTimeout=120000"
       PYTHONPATH: /opt/taxiflow/src
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -322,7 +324,7 @@ services:
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
     volumes:
       - ./:/opt/taxiflow:ro
-      - spark-ivy:/tmp/.ivy2
+      - ./.cache/spark-ivy:/tmp/.ivy2
     networks: [taxiflow]
     restart: unless-stopped
     depends_on:
@@ -494,6 +496,9 @@ services:
     user: root
     environment:
       SPARK_NO_DAEMONIZE: "true"
+      # Bound Ivy's remote reads: a dropped Maven socket otherwise blocks
+      # spark-submit forever (no default read timeout).
+      SPARK_SUBMIT_OPTS: "-Dsun.net.client.defaultConnectTimeout=30000 -Dsun.net.client.defaultReadTimeout=120000"
       PYTHONPATH: /opt/taxiflow/src
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -501,7 +506,7 @@ services:
       S3A_ENDPOINT: http://minio:9000
     volumes:
       - ./:/opt/taxiflow:ro
-      - spark-ivy:/tmp/.ivy2
+      - ./.cache/spark-ivy:/tmp/.ivy2
     networks: [taxiflow]
     restart: unless-stopped
     healthcheck:

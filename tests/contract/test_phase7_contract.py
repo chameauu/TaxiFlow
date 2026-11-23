@@ -8,14 +8,17 @@ static gate instead of absorbing the data path.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 pytestmark = pytest.mark.contract
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE_PATH = PROJECT_ROOT / "Makefile"
+COMPOSE_PATH = PROJECT_ROOT / "docker-compose.yaml"
 
 # The ordered data path the goal sentence promises: platform up, data in,
 # bronze verified, dbt built, quality gated, dashboard served.
@@ -108,3 +111,49 @@ def test_seed_reports_cache_status_before_download() -> None:
     assert status >= 0, "seed must print which manifest files are cached"
     assert download >= 0, "seed must still download missing files"
     assert status < download, "cache status must be reported before downloading"
+
+
+def test_spark_services_reuse_a_host_jar_cache() -> None:
+    # Ivy jars are immutable dependencies, not pipeline state: `make reset`
+    # must not force a 660 MB re-download over a slow CDN.
+    data = yaml.safe_load(COMPOSE_PATH.read_text())
+    services = data["services"]
+
+    for name in ("spark", "spark-stream"):
+        mounts = services[name]["volumes"]
+        assert "./.cache/spark-ivy:/tmp/.ivy2" in mounts, name
+
+    assert "spark-ivy" not in (data.get("volumes") or {}), (
+        "the disposable spark-ivy volume must not be declared any more"
+    )
+
+
+def test_batch_retries_transient_dependency_downloads() -> None:
+    recipe = "\n".join(recipe_lines(makefile_text(), "batch"))
+    loop = recipe.find("while [ $$attempt -lt 3 ]")
+    job = recipe.find("batch_bronze.py")
+    assert loop >= 0, "batch must retry in a three-attempt loop"
+    assert job > loop, "the spark job must run inside the retry loop"
+    assert "sleep 20" in recipe, "retries must back off before downloading again"
+
+
+def test_cdc_report_retries_transient_dependency_downloads() -> None:
+    recipe = "\n".join(recipe_lines(makefile_text(), "cdc-report"))
+    loop = recipe.find("while [ $$attempt -lt 3 ]")
+    job = recipe.find("report_cdc.py")
+    assert loop >= 0, "cdc-report must retry in a three-attempt loop"
+    assert job > loop, "the spark job must run inside the retry loop"
+    assert "sleep 20" in recipe, "retries must back off before downloading again"
+
+
+def test_spark_services_bound_remote_dependency_downloads() -> None:
+    # A stalled Maven read has no default timeout in Ivy: the gate hung for
+    # three hours on one dropped socket. Both Spark entry points must bound it.
+    data = yaml.safe_load(COMPOSE_PATH.read_text())
+    services = data["services"]
+
+    for name in ("spark", "spark-stream"):
+        opts = services[name]["environment"].get("SPARK_SUBMIT_OPTS", "")
+        assert "sun.net.client.defaultConnectTimeout" in opts, name
+        match = re.search(r"sun\.net\.client\.defaultReadTimeout=(\d+)", opts)
+        assert match and int(match.group(1)) > 0, name

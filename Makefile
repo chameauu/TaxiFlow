@@ -124,7 +124,20 @@ seed: env
 
 batch: env
 	$(COMPOSE) --profile core up -d --wait minio
-	$(COMPOSE) --profile core --profile batch run --rm --no-deps spark $(SPARK_SUBMIT) /opt/taxiflow/src/taxiflow/jobs/batch_bronze.py --root /opt/taxiflow --manifest /opt/taxiflow/config/tlc_manifest.json --service yellow --year 2024 --month 1 --write-partitions 8
+	@attempt=0; \
+	while [ $$attempt -lt 3 ]; do \
+		attempt=$$((attempt + 1)); \
+		echo "batch attempt $$attempt/3"; \
+		if $(COMPOSE) --profile core --profile batch run --rm --no-deps spark $(SPARK_SUBMIT) /opt/taxiflow/src/taxiflow/jobs/batch_bronze.py --root /opt/taxiflow --manifest /opt/taxiflow/config/tlc_manifest.json --service yellow --year 2024 --month 1 --write-partitions 8; then \
+			exit 0; \
+		fi; \
+		if [ $$attempt -lt 3 ]; then \
+			echo "batch attempt $$attempt failed (likely a stalled dependency download); retrying in 20s"; \
+			sleep 20; \
+		fi; \
+	done; \
+	echo "batch failed after 3 attempts"; \
+	exit 1
 
 batch-report: env
 	$(COMPOSE) --profile core --profile batch run --rm --no-deps spark $(SPARK_SUBMIT) /opt/taxiflow/src/taxiflow/jobs/report_bronze.py
@@ -147,7 +160,20 @@ cdc-stop: env
 	$(COMPOSE) --profile core --profile stream stop stream-generator spark-stream
 
 cdc-report: env
-	$(COMPOSE) --profile core --profile stream run --rm --no-deps -T spark-stream $(SPARK_STREAM_SUBMIT) /opt/taxiflow/src/taxiflow/jobs/report_cdc.py --max-freshness-seconds 60
+	@attempt=0; \
+	while [ $$attempt -lt 3 ]; do \
+		attempt=$$((attempt + 1)); \
+		echo "cdc-report attempt $$attempt/3"; \
+		if $(COMPOSE) --profile core --profile stream run --rm --no-deps -T spark-stream $(SPARK_STREAM_SUBMIT) /opt/taxiflow/src/taxiflow/jobs/report_cdc.py --max-freshness-seconds 60; then \
+			exit 0; \
+		fi; \
+		if [ $$attempt -lt 3 ]; then \
+			echo "cdc-report attempt $$attempt failed (likely a stalled dependency download); retrying in 20s"; \
+			sleep 20; \
+		fi; \
+	done; \
+	echo "cdc-report failed after 3 attempts"; \
+	exit 1
 
 cdc-replay: env
 	$(COMPOSE) --profile core --profile stream up -d --wait minio
