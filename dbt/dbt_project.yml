@@ -34,3 +34,12 @@ seeds:
         Borough: varchar
         Zone: varchar
         service_zone: varchar
+    # Committed CDC events for the fixture test (assert_cdc_fixture_semantics).
+    # Values are varchar so the shared macro casts them exactly as it casts
+    # bronze columns; only the event timestamp needs a real numeric type.
+    cdc_events_fixture:
+      +schema: reference
+      +column_types:
+        __source_ts_ms: bigint
+    cdc_events_expected:
+      +schema: reference

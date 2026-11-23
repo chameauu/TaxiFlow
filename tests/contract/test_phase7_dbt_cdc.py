@@ -24,6 +24,8 @@ pytestmark = pytest.mark.contract
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DBT_MODELS = PROJECT_ROOT / "dbt" / "models"
 DBT_TESTS = PROJECT_ROOT / "dbt" / "tests"
+DBT_ROOT = PROJECT_ROOT / "dbt"
+CDC_MACRO = DBT_ROOT / "macros" / "cdc_live_state.sql"
 SOURCES_YML = DBT_MODELS / "sources.yml"
 SCHEMA_YML = DBT_MODELS / "schema.yml"
 STG_CDC_SQL = DBT_MODELS / "staging" / "stg_cdc_trips.sql"
@@ -51,17 +53,21 @@ def test_stg_cdc_trips_applies_event_semantics() -> None:
     assert "source('bronze', 'cdc_taxi_trips')" in sql, (
         "stg_cdc_trips must read the CDC bronze Delta table"
     )
-    assert "__source_ts_ms" in sql and "row_number" in sql, (
-        "stg_cdc_trips must reduce events to the latest per trip_id by source ts"
+    # The reduction rules live in the shared cdc_live_state macro so the
+    # committed fixture test exercises the same SQL (see test_phase7_cdc_fixture).
+    assert "cdc_live_state(source('bronze', 'cdc_taxi_trips'))" in sql
+    macro = CDC_MACRO.read_text()
+    assert "__source_ts_ms" in macro and "row_number" in macro, (
+        "the macro must reduce events to the latest per trip_id by source ts"
     )
-    assert "__op" in sql, "stg_cdc_trips must evaluate the event operation"
-    assert "is_deleted" in sql, (
-        "stg_cdc_trips must keep a live-state flag for deletes"
+    assert "__op" in macro, "the macro must evaluate the event operation"
+    assert "is_deleted" in macro, (
+        "the macro must keep a live-state flag for deletes"
     )
 
 
 def test_stg_cdc_trips_restores_utc_instants_not_new_york() -> None:
-    sql = text_of(STG_CDC_SQL)
+    sql = text_of(STG_CDC_SQL) + "\n" + CDC_MACRO.read_text()
     executable = "\n".join(
         line for line in sql.splitlines() if not line.lstrip().startswith("--")
     )
