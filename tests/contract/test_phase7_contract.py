@@ -169,3 +169,13 @@ def test_gate_recovers_cdc_after_the_batch_load() -> None:
     assert "connectors/taxiflow-iot/status" in recipe
     assert '"state":"RUNNING"' in recipe
     assert "sleep 2" in recipe
+
+
+def test_integration_targets_load_the_local_environment() -> None:
+    # Superset credentials live in .env; pytest does not read that file itself,
+    # so every target that runs integration tests must export it first.
+    text = makefile_text()
+
+    for target in ("serving-verify", "test-integration"):
+        recipe = "\n".join(recipe_lines(text, target))
+        assert "set -a; . ./.env; set +a" in recipe, target

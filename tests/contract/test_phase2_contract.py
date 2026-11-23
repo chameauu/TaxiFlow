@@ -33,7 +33,7 @@ def test_spark_mounts_the_project_read_only_and_a_persistent_ivy_cache() -> None
     volumes = spark_service().get("volumes", [])
 
     assert "./:/opt/taxiflow:ro" in volumes
-    assert "spark-ivy:/tmp/.ivy2" in volumes
+    assert "./.cache/spark-ivy:/tmp/.ivy2" in volumes
 
 
 def test_spark_receives_lake_credentials_and_the_package_path() -> None:

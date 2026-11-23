@@ -267,7 +267,8 @@ test:
 test-contract:
 	uv run pytest -q -m contract
 
-test-integration:
+test-integration: env
+	set -a; . ./.env; set +a; \
 	TAXIFLOW_REQUIRE_STACK=1 uv run pytest -q -m integration
 
 lint:
