@@ -26,6 +26,7 @@ GATE_STEPS = (
     "up-all",
     "seed",
     "batch",
+    "cdc-recover",
     "cdc-seed",
     "cdc-report",
     "dbt-build",
@@ -157,3 +158,14 @@ def test_spark_services_bound_remote_dependency_downloads() -> None:
         assert "sun.net.client.defaultConnectTimeout" in opts, name
         match = re.search(r"sun\.net\.client\.defaultReadTimeout=(\d+)", opts)
         assert match and int(match.group(1)) > 0, name
+
+
+def test_gate_recovers_cdc_after_the_batch_load() -> None:
+    # The batch job saturates the host, Kafka's Connect worker loses its group,
+    # and the Debezium connector sits UNASSIGNED for minutes. The gate restarts
+    # Debezium and waits for the connector to report RUNNING again.
+    recipe = "\n".join(recipe_lines(makefile_text(), "cdc-recover"))
+    assert "restart debezium" in recipe
+    assert "connectors/taxiflow-iot/status" in recipe
+    assert '"state":"RUNNING"' in recipe
+    assert "sleep 2" in recipe

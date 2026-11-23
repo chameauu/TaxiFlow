@@ -11,7 +11,7 @@ ALL_PROFILES := $(RUNTIME_PROFILES) --profile batch
 PROFILES := $(ALL_PROFILES)
 S3_BUCKET ?= taxiflow
 
-.PHONY: help env up up-all down reset logs ps images pull sync lock seed batch batch-report cdc-init cdc-seed cdc-register cdc-start cdc-stop cdc-report cdc-replay dbt-debug dbt-build quality superset-bootstrap serving-verify gate register-sources test test-contract test-integration lint format compose-check verify
+.PHONY: help env up up-all down reset logs ps images pull sync lock seed batch batch-report cdc-init cdc-seed cdc-register cdc-start cdc-stop cdc-report cdc-recover cdc-replay dbt-debug dbt-build quality superset-bootstrap serving-verify gate register-sources test test-contract test-integration lint format compose-check verify
 
 help:
 	@printf '%s\n' \
@@ -34,6 +34,7 @@ help:
 		'make cdc-start     Start the synthetic generator and streaming worker' \
 		'make cdc-stop      Stop the CDC generator and streaming worker' \
 		'make cdc-report    Print CDC bronze counts and freshness' \
+		'make cdc-recover   Restart Debezium and wait for the connector to be RUNNING' \
 		'make cdc-replay    Replay a deterministic CDC batch twice' \
 		'make register-sources  Register bronze Delta tables with Trino' \
 		'make dbt-debug     Check the dbt Trino connection' \
@@ -175,6 +176,22 @@ cdc-report: env
 	echo "cdc-report failed after 3 attempts"; \
 	exit 1
 
+cdc-recover: env
+	@echo "restarting Debezium and waiting for connector taxiflow-iot"
+	@$(COMPOSE) --profile core --profile stream restart debezium >/dev/null
+	@attempt=0; \
+	while [ $$attempt -lt 60 ]; do \
+		attempt=$$((attempt + 1)); \
+		running=$$(curl -fsS http://localhost:8083/connectors/taxiflow-iot/status 2>/dev/null | grep -o '"state":"RUNNING"' | wc -l | tr -d ' '); \
+		if [ "$$running" -ge 2 ]; then \
+			echo "connector taxiflow-iot is RUNNING"; \
+			exit 0; \
+		fi; \
+		sleep 2; \
+	done; \
+	echo "connector taxiflow-iot did not reach RUNNING within 120s"; \
+	exit 1
+
 cdc-replay: env
 	$(COMPOSE) --profile core --profile stream up -d --wait minio
 	TAXIFLOW_REQUIRE_STACK=1 uv run pytest -q -m integration tests/integration/test_cdc_stream_stack.py
@@ -228,6 +245,7 @@ gate: env
 	$(MAKE) --no-print-directory up-all && \
 	$(MAKE) --no-print-directory seed && \
 	$(MAKE) --no-print-directory batch && \
+	$(MAKE) --no-print-directory cdc-recover && \
 	$(MAKE) --no-print-directory cdc-seed && \
 	$(MAKE) --no-print-directory cdc-report && \
 	$(MAKE) --no-print-directory dbt-build && \
